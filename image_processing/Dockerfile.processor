@@ -1,0 +1,55 @@
+# Image Processor Container - Ubuntu base for FileMaker JDBC + complex processing
+FROM python:3.11-slim
+
+# Install system dependencies
+RUN apt-get update && apt-get install -y \
+    wget \
+    curl \
+    build-essential \
+    openjdk-17-jdk-headless \
+    openjdk-17-jre-headless \
+    unixodbc \
+    unixodbc-dev \
+    libglib2.0-0 \
+    libsm6 \
+    libxext6 \
+    libxrender-dev \
+    libgomp1 \
+    exiftool \
+    && rm -rf /var/lib/apt/lists/*
+
+# Set Java environment
+ENV JAVA_HOME=/usr/lib/jvm/java-17-openjdk-amd64
+ENV PATH=$PATH:$JAVA_HOME/bin
+
+# Create working directory
+WORKDIR /app
+
+# Copy processor requirements
+COPY requirements.processor.txt /tmp/requirements.processor.txt
+
+# Install Python packages
+RUN pip install --no-cache-dir -r /tmp/requirements.processor.txt
+
+# Create directories
+RUN mkdir -p /scripts /config /assets /data
+
+# Copy processor files
+COPY scripts/image_processor.py /scripts/
+COPY scripts/processor_server.py /scripts/
+COPY scripts/utils/ /scripts/utils/
+COPY config/output_specs.yaml /config/
+COPY assets/ /assets/
+
+# Set permissions
+RUN chmod +x /scripts/*.py
+
+# Expose port for processor API
+EXPOSE 8003
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
+    CMD curl -f http://localhost:8003/health || exit 1
+
+# Run processor server
+CMD ["python3", "/scripts/processor_server.py"]

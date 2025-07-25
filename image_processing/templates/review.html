@@ -1,0 +1,698 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Review: {{ filename }} - Crown Automotive</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+            min-height: 100vh;
+        }
+
+        .header {
+            background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%);
+            color: white;
+            padding: 20px;
+            text-align: center;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+
+        .header h1 {
+            font-size: 2em;
+            margin-bottom: 10px;
+            font-weight: 300;
+        }
+
+        .header p {
+            opacity: 0.9;
+            font-size: 1.1em;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 30px 20px;
+        }
+
+        .info-panel {
+            background: white;
+            border-radius: 16px;
+            padding: 25px;
+            margin-bottom: 30px;
+            box-shadow: 0 8px 25px rgba(0, 0, 0, 0.1);
+        }
+
+        .info-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 20px;
+            margin-bottom: 20px;
+        }
+
+        .info-item {
+            padding: 15px;
+            background: #f8f9fa;
+            border-radius: 8px;
+            border-left: 4px solid #007acc;
+        }
+
+        .info-label {
+            font-size: 0.85em;
+            color: #666;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            margin-bottom: 5px;
+        }
+
+        .info-value {
+            font-weight: 600;
+            color: #2c3e50;
+            font-size: 1.1em;
+        }
+
+        .comparison {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 30px;
+            margin: 30px 0;
+        }
+
+        .image-panel {
+            background: white;
+            border-radius: 16px;
+            padding: 25px;
+            text-align: center;
+            box-shadow: 0 8px 25px rgba(0, 0, 0, 0.1);
+            transition: all 0.3s ease;
+        }
+
+        .image-panel:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 12px 35px rgba(0, 0, 0, 0.15);
+        }
+
+        .image-panel h3 {
+            margin-bottom: 20px;
+            color: #2c3e50;
+            font-size: 1.3em;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+        }
+
+        .image-container {
+            position: relative;
+            margin-bottom: 20px;
+            border-radius: 12px;
+            overflow: hidden;
+            background: linear-gradient(45deg, #f0f0f0 25%, transparent 25%),
+            linear-gradient(-45deg, #f0f0f0 25%, transparent 25%),
+            linear-gradient(45deg, transparent 75%, #f0f0f0 75%),
+            linear-gradient(-45deg, transparent 75%, #f0f0f0 75%);
+            background-size: 20px 20px;
+            background-position: 0 0, 0 10px, 10px -10px, -10px 0px;
+        }
+
+        .image-container img {
+            max-width: 100%;
+            height: auto;
+            border-radius: 12px;
+            display: block;
+            margin: 0 auto;
+            transition: all 0.3s ease;
+            cursor: pointer;
+        }
+
+        .image-container:hover img {
+            transform: scale(1.02);
+        }
+
+        .image-info {
+            font-size: 0.9em;
+            color: #666;
+            margin-top: 10px;
+        }
+
+        .zoom-indicator {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            background: rgba(0, 0, 0, 0.7);
+            color: white;
+            padding: 5px 10px;
+            border-radius: 20px;
+            font-size: 0.8em;
+            opacity: 0;
+            transition: opacity 0.2s ease;
+        }
+
+        .image-container:hover .zoom-indicator {
+            opacity: 1;
+        }
+
+        .buttons {
+            text-align: center;
+            margin: 40px 0;
+            display: flex;
+            justify-content: center;
+            gap: 20px;
+            flex-wrap: wrap;
+        }
+
+        .btn {
+            padding: 18px 35px;
+            font-size: 1.1em;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-weight: 600;
+            text-decoration: none;
+            display: inline-flex;
+            align-items: center;
+            gap: 10px;
+            transition: all 0.3s ease;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            min-width: 160px;
+            justify-content: center;
+        }
+
+        .btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 20px rgba(0, 0, 0, 0.2);
+        }
+
+        .btn:active {
+            transform: translateY(0);
+        }
+
+        .approve {
+            background: linear-gradient(135deg, #28a745, #20c997);
+            color: white;
+        }
+
+        .reject {
+            background: linear-gradient(135deg, #dc3545, #e74c3c);
+            color: white;
+        }
+
+        .retry {
+            background: linear-gradient(135deg, #ffc107, #ffb300);
+            color: #212529;
+        }
+
+        .info {
+            background: linear-gradient(135deg, #17a2b8, #138496);
+            color: white;
+        }
+
+        .secondary {
+            background: linear-gradient(135deg, #6c757d, #5a6268);
+            color: white;
+        }
+
+        .status-message {
+            text-align: center;
+            padding: 20px;
+            margin: 20px 0;
+            border-radius: 8px;
+            font-weight: 500;
+            display: none;
+        }
+
+        .status-success {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+
+        .status-error {
+            background: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+
+        .status-info {
+            background: #d1ecf1;
+            color: #0c5460;
+            border: 1px solid #bee5eb;
+        }
+
+        .loading {
+            display: none;
+            text-align: center;
+            padding: 20px;
+        }
+
+        .spinner {
+            display: inline-block;
+            width: 40px;
+            height: 40px;
+            border: 4px solid rgba(0, 122, 204, .3);
+            border-radius: 50%;
+            border-top-color: #007acc;
+            animation: spin 1s ease-in-out infinite;
+        }
+
+        @keyframes spin {
+            to {
+                transform: rotate(360deg);
+            }
+        }
+
+        .back-link {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            color: #007acc;
+            text-decoration: none;
+            font-weight: 500;
+            margin-bottom: 20px;
+            transition: all 0.2s ease;
+        }
+
+        .back-link:hover {
+            color: #0056b3;
+            transform: translateX(-3px);
+        }
+
+        .metadata-panel {
+            background: white;
+            border-radius: 16px;
+            padding: 25px;
+            margin-top: 30px;
+            box-shadow: 0 8px 25px rgba(0, 0, 0, 0.1);
+        }
+
+        .metadata-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 15px;
+        }
+
+        .metadata-item {
+            padding: 12px 15px;
+            background: #f8f9fa;
+            border-radius: 6px;
+            border-left: 3px solid #007acc;
+        }
+
+        .metadata-label {
+            font-size: 0.8em;
+            color: #666;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-bottom: 3px;
+        }
+
+        .metadata-value {
+            font-weight: 500;
+            color: #2c3e50;
+            word-break: break-word;
+        }
+
+        .modal {
+            display: none;
+            position: fixed;
+            z-index: 1000;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.9);
+            justify-content: center;
+            align-items: center;
+        }
+
+        .modal img {
+            max-width: 90%;
+            max-height: 90%;
+            object-fit: contain;
+        }
+
+        .modal-close {
+            position: absolute;
+            top: 20px;
+            right: 30px;
+            color: white;
+            font-size: 40px;
+            cursor: pointer;
+        }
+
+        @media (max-width: 768px) {
+            .comparison {
+                grid-template-columns: 1fr;
+                gap: 20px;
+            }
+
+            .buttons {
+                flex-direction: column;
+                align-items: center;
+            }
+
+            .btn {
+                width: 100%;
+                max-width: 300px;
+            }
+
+            .info-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .container {
+                padding: 20px 15px;
+            }
+        }
+    </style>
+</head>
+<body>
+<div class="header">
+    <h1>🔍 Background Removal Review</h1>
+    <p>Review and approve processed images for production</p>
+</div>
+
+<div class="container">
+    <a href="{{ server_url }}/" class="back-link">
+        ← Back to Dashboard
+    </a>
+
+    <div class="info-grid">
+        <div class="info-item">
+            <div class="info-label">Part Number</div>
+            <div class="info-value">{{ metadata.get('part_metadata', {}).get('PartNumber', 'Unknown') }}</div>
+        </div>
+
+        <div class="info-item">
+            <div class="info-label">Description</div>
+            <div class="info-value">{{ metadata.get('part_metadata', {}).get('Title', 'No description') }}</div>
+        </div>
+
+        <div class="info-item">
+            <div class="info-label">Brand</div>
+            <div class="info-value">{{ metadata.get('part_metadata', {}).get('PartBrand', 'Crown Automotive') }}
+            </div>
+        </div>
+
+        <div class="info-item">
+            <div class="info-label">File Size</div>
+            <div class="info-value">{{ "%.1f"|format((metadata.get('background_removal', {}).get('original_size',
+                {}).get('width', 0) * metadata.get('background_removal', {}).get('original_size', {}).get('height',
+                0)) / 1000000) }} MP
+            </div>
+        </div>
+
+        <div class="info-item">
+            <div class="info-label">Processing Time</div>
+            <div class="info-value">{{ "%.1f"|format(metadata.get('background_removal',
+                {}).get('processing_time_seconds', 0)) }}s
+            </div>
+        </div>
+
+        <div class="info-item">
+            <div class="info-label">Model Used</div>
+            <div class="info-value">{{ metadata.get('background_removal', {}).get('model_used', 'isnet-general-use')
+                }}
+            </div>
+        </div>
+    </div>
+
+    <div class="comparison">
+        <div class="image-panel">
+            <h3>📁 Original Image</h3>
+            <div class="image-container">
+                <img id="original-image"
+                     src="{{ server_url }}/originals/{{ filename|urlencode }}"
+                     alt="Original image"
+                     onclick="openModal(this.src)"
+                     onerror="handleImageError(this, 'original')">
+                <div class="zoom-indicator">Click to zoom</div>
+            </div>
+            <div class="image-info">
+                {% if metadata.get('background_removal', {}).get('original_size', {}) %}
+                {{ metadata.background_removal.original_size.width }}×{{
+                metadata.background_removal.original_size.height }}
+                {% endif %}
+            </div>
+        </div>
+
+        <div class="image-panel">
+            <h3>✨ Background Removed</h3>
+            <div class="image-container">
+                <img id="bg-removed-image"
+                     src="{{ server_url }}/bg_removed/{{ filename|urlencode }}"
+                     alt="Background removed"
+                     onclick="openModal(this.src)"
+                     onerror="handleImageError(this, 'bg_removed')">
+                <div class="zoom-indicator">Click to zoom</div>
+            </div>
+            <div class="image-info">
+                {% if metadata.get('background_removal', {}).get('result_size', {}) %}
+                {{ metadata.background_removal.result_size.width }}×{{ metadata.background_removal.result_size.height }}
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    <div class="status-message" id="status-message"></div>
+
+    <div class="loading" id="loading">
+        <div class="spinner"></div>
+        <p style="margin-top: 15px;">Processing your decision...</p>
+    </div>
+
+    <div class="buttons" id="action-buttons">
+        <button class="btn approve" onclick="submitDecision('approve')">
+            ✅ Approve & Process All Formats
+        </button>
+
+        <button class="btn retry" onclick="submitDecision('retry')">
+            🔄 Retry with Different Settings
+        </button>
+
+        <button class="btn reject" onclick="submitDecision('reject')">
+            ❌ Reject & Move to Manual Review
+        </button>
+
+        <a href="{{ server_url }}/exif/{{ filename|urlencode }}" class="btn info">
+            📊 View/Edit EXIF Data
+        </a>
+
+        <a href="{{ server_url }}/" class="btn secondary">
+            📈 Back to Dashboard
+        </a>
+    </div>
+
+    {% if metadata.part_metadata %}
+    <div class="metadata-panel">
+        <h3 style="margin-bottom: 20px; color: #2c3e50;">📋 Part Metadata</h3>
+
+        <div class="metadata-grid">
+            {% for key, value in metadata.part_metadata.items() %}
+            {% if value %}
+            <div class="metadata-item">
+                <div class="metadata-label">{{ key.replace('_', ' ').title() }}</div>
+                <div class="metadata-value">{{ value }}</div>
+            </div>
+            {% endif %}
+            {% endfor %}
+        </div>
+    </div>
+    {% endif %}
+</div>
+
+<!-- Image Modal -->
+<div class="modal" id="imageModal" onclick="closeModal()">
+    <span class="modal-close" onclick="closeModal()">&times;</span>
+    <img id="modalImage" src="" alt="Zoomed image">
+</div>
+
+<script>
+    // Get the base filename without bg_removed suffix for proper URL construction
+    const baseFilename = '{{ filename }}'.replace('_bg_removed', '').replace('.png', '');
+    const serverUrl = '{{ server_url }}';
+
+    function handleImageError(img, type) {
+        console.warn(`Failed to load ${type} image:`, img.src);
+
+        if (type === 'original') {
+            // Try different extensions and paths for original file
+            const extensions = ['.psd', '.png', '.jpg', '.jpeg', '.tif', '.tiff'];
+            const currentUrl = new URL(img.src);
+            const pathParts = currentUrl.pathname.split('/');
+            const filename = decodeURIComponent(pathParts[pathParts.length - 1]);
+            const baseNameClean = filename.replace('_bg_removed', '').split('.')[0];
+
+            // Try different extensions
+            for (const ext of extensions) {
+                const testUrl = `${serverUrl}/originals/${encodeURIComponent(baseNameClean + ext)}`;
+                if (testUrl !== img.src) {
+                    img.src = testUrl;
+                    return;
+                }
+            }
+
+            // If all fail, show placeholder
+            img.style.display = 'none';
+            img.parentElement.innerHTML += '<div style="padding: 40px; color: #666; text-align: center;">Original image not found</div>';
+
+        } else if (type === 'bg_removed') {
+            // For bg_removed, try constructing the proper filename
+            const bgRemovedUrl = `${serverUrl}/bg_removed/${encodeURIComponent(baseFilename + '_bg_removed.png')}`;
+            if (bgRemovedUrl !== img.src) {
+                img.src = bgRemovedUrl;
+                return;
+            }
+
+            // If that fails too, show placeholder
+            img.style.display = 'none';
+            img.parentElement.innerHTML += '<div style="padding: 40px; color: #666; text-align: center;">Background removed image not found</div>';
+        }
+    }
+
+    function submitDecision(action) {
+        const actionButtons = document.getElementById('action-buttons');
+        const loading = document.getElementById('loading');
+        const statusMessage = document.getElementById('status-message');
+
+        // Show loading state
+        actionButtons.style.display = 'none';
+        loading.style.display = 'block';
+        statusMessage.style.display = 'none';
+
+        // Prepare decision data with the original filename
+        const decisionData = {
+            action: action,
+            fileId: '{{ filename }}',
+            timestamp: new Date().toISOString()
+        };
+
+        // Submit decision
+        fetch('/api/decision', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(decisionData)
+        })
+                .then(response => response.json())
+                .then(data => {
+                    loading.style.display = 'none';
+
+                    if (data.status === 'success') {
+                        let message = '';
+                        let className = 'status-success';
+
+                        switch (action) {
+                            case 'approve':
+                                message = '✅ Image approved! Processing all production formats... You will receive a Teams notification when complete.';
+                                break;
+                            case 'retry':
+                                message = '🔄 Retrying with different settings... Please check back in a few minutes.';
+                                break;
+                            case 'reject':
+                                message = '❌ Image rejected and moved to manual review queue.';
+                                break;
+                        }
+
+                        statusMessage.textContent = message;
+                        statusMessage.className = `status-message ${className}`;
+                        statusMessage.style.display = 'block';
+
+                        // Redirect to dashboard after a delay
+                        setTimeout(() => {
+                            window.location.href = '{{ server_url }}/';
+                        }, 3000);
+
+                    } else {
+                        // Show error
+                        statusMessage.textContent = `❌ Error: ${data.error || 'Unknown error occurred'}`;
+                        statusMessage.className = 'status-message status-error';
+                        statusMessage.style.display = 'block';
+                        actionButtons.style.display = 'flex';
+                    }
+                })
+                .catch(error => {
+                    loading.style.display = 'none';
+                    actionButtons.style.display = 'flex';
+
+                    statusMessage.textContent = `❌ Network error: ${error.message}`;
+                    statusMessage.className = 'status-message status-error';
+                    statusMessage.style.display = 'block';
+                });
+    }
+
+    function openModal(imageSrc) {
+        const modal = document.getElementById('imageModal');
+        const modalImg = document.getElementById('modalImage');
+
+        modal.style.display = 'flex';
+        modalImg.src = imageSrc;
+
+        // Prevent body scrolling
+        document.body.style.overflow = 'hidden';
+    }
+
+    function closeModal() {
+        const modal = document.getElementById('imageModal');
+        modal.style.display = 'none';
+
+        // Restore body scrolling
+        document.body.style.overflow = '';
+    }
+
+    // Keyboard shortcuts
+    document.addEventListener('keydown', function (e) {
+        if (e.key === 'Escape') {
+            closeModal();
+        } else if (e.key === 'a' || e.key === 'A') {
+            if (document.getElementById('loading').style.display !== 'block') {
+                submitDecision('approve');
+            }
+        } else if (e.key === 'r' || e.key === 'R') {
+            if (document.getElementById('loading').style.display !== 'block') {
+                submitDecision('retry');
+            }
+        } else if (e.key === 'x' || e.key === 'X') {
+            if (document.getElementById('loading').style.display !== 'block') {
+                submitDecision('reject');
+            }
+        }
+    });
+
+    // Show keyboard shortcuts hint
+    setTimeout(() => {
+        const hint = document.createElement('div');
+        hint.style.cssText = `
+                position: fixed;
+                bottom: 20px;
+                left: 20px;
+                background: rgba(0,0,0,0.8);
+                color: white;
+                padding: 10px 15px;
+                border-radius: 6px;
+                font-size: 0.8em;
+                z-index: 100;
+                opacity: 0;
+                transition: opacity 0.3s ease;
+            `;
+        hint.innerHTML = 'Keyboard shortcuts: A=Approve, R=Retry, X=Reject, ESC=Close modal';
+        document.body.appendChild(hint);
+
+        setTimeout(() => hint.style.opacity = '1', 100);
+        setTimeout(() => {
+            hint.style.opacity = '0';
+            setTimeout(() => hint.remove(), 300);
+        }, 5000);
+    }, 2000);
+</script>
+</body>
+</html>

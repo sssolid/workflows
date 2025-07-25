@@ -1,0 +1,16 @@
+# Teams Notifier Requirements - Alpine compatible
+# Web framework
+fastapi>=0.104.0
+uvicorn>=0.24.0
+
+# Templating
+jinja2>=3.1.0
+
+# HTTP requests
+httpx>=0.24.0
+requests>=2.31.0
+
+# Utilities
+pydantic>=2.4.0
+structlog>=23.1.0
+python-dateutil>=2.8.0

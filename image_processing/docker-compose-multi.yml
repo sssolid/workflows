@@ -1,0 +1,147 @@
+services:
+  # n8n Workflow Engine (Alpine - lightweight)
+  n8n:
+    build:
+      context: .
+      dockerfile: Dockerfile.n8n
+    container_name: crown_n8n
+    restart: unless-stopped
+    ports:
+      - "5678:5678"
+    env_file: ".env"
+    volumes:
+      - n8n_data:/home/node/.n8n
+      - ./scripts:/scripts
+      - ./config/n8n:/config
+      - ./data:/data
+    networks:
+      - crown_network
+    depends_on:
+      - ml_processor
+      - web_server
+      - file_monitor
+      - image_processor
+      - teams_notifier
+
+  # ML Processing Container (Ubuntu - for PyTorch/rembg)
+  ml_processor:
+    build:
+      context: .
+      dockerfile: Dockerfile.ml
+    container_name: crown_ml_processor
+    restart: unless-stopped
+    ports:
+      - "8001:8001"
+    env_file: ".env"
+    volumes:
+      - ./scripts:/scripts
+      - ./config:/config
+      - ./data:/data
+      - ./assets:/assets
+      - ml_models_cache:/root/.cache  # Cache for rembg models
+    networks:
+      - crown_network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8001/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Web Server & Dashboard (Alpine - lightweight)
+  web_server:
+    build:
+      context: .
+      dockerfile: Dockerfile.web
+    container_name: crown_web_server
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    env_file: ".env"
+    volumes:
+      - ./scripts:/scripts
+      - ./config:/config
+      - ./templates:/templates
+      - ./assets:/assets
+      - ./data:/data
+    networks:
+      - crown_network
+    depends_on:
+      - ml_processor
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # File Monitor (Alpine - lightweight)
+  file_monitor:
+    build:
+      context: .
+      dockerfile: Dockerfile.monitor
+    container_name: crown_file_monitor
+    restart: unless-stopped
+    ports:
+      - "8002:8002"
+    env_file: ".env"
+    volumes:
+      - ./scripts:/scripts
+      - ./config:/config
+      - ./data:/data
+    networks:
+      - crown_network
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:8002/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Image Processor (Ubuntu - for FileMaker JDBC + complex image processing)
+  image_processor:
+    build:
+      context: .
+      dockerfile: Dockerfile.processor
+    container_name: crown_image_processor
+    restart: unless-stopped
+    ports:
+      - "8003:8003"
+    env_file: ".env"
+    volumes:
+      - ./scripts:/scripts
+      - ./config:/config
+      - ./assets:/assets
+      - ./data:/data
+    networks:
+      - crown_network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8003/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Teams Notifier (Alpine - lightweight)
+  teams_notifier:
+    build:
+      context: .
+      dockerfile: Dockerfile.notifier
+    container_name: crown_teams_notifier
+    restart: unless-stopped
+    ports:
+      - "8004:8004"
+    env_file: ".env"
+    volumes:
+      - ./scripts:/scripts
+      - ./config:/config
+      - ./templates:/templates
+    networks:
+      - crown_network
+
+networks:
+  crown_network:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.20.0.0/16
+
+volumes:
+  n8n_data:
+  ml_models_cache:  # Persistent cache for rembg models

@@ -1,0 +1,673 @@
+{
+  "name": "My workflow",
+  "nodes": [
+    {
+      "parameters": {
+        "triggerTimes": {
+          "item": [
+            {
+              "mode": "everyMinute"
+            }
+          ]
+        }
+      },
+      "id": "9134d3a6-8559-40bd-9433-d1568f3fb226",
+      "name": "File Monitor Trigger",
+      "type": "n8n-nodes-base.cron",
+      "typeVersion": 1,
+      "position": [
+        -420,
+        560
+      ]
+    },
+    {
+      "parameters": {
+        "url": "http://file_monitor:8002/scan",
+        "options": {
+          "timeout": 10000
+        }
+      },
+      "id": "f95eac30-71cb-4a7f-90a1-8d63ecbf7a46",
+      "name": "Check for New Files",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [
+        -200,
+        560
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Parse file monitor response and process each new file\nconst response = $input.first().json;\nconst newFiles = response.new_files || [];\n\nif (newFiles.length === 0) {\n  // No new files, stop workflow\n  return [];\n}\n\nconst results = [];\n\nfor (const file of newFiles) {\n  const fileExtension = file.suffix.toLowerCase();\n  const isPSD = fileExtension === '.psd';\n  \n  results.push({\n    json: {\n      file_path: file.path,\n      filename: file.name,\n      file_size_mb: file.size_mb,\n      dimensions: file.dimensions || { width: 0, height: 0 },\n      is_psd: isPSD,\n      processing_type: isPSD ? 'direct_psd' : 'background_removal',\n      timestamp: new Date().toISOString()\n    }\n  });\n}\n\nreturn results;"
+      },
+      "id": "75244749-f7af-4bc7-a23a-aeb1bfeac436",
+      "name": "Process File List",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        20,
+        560
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "condition_1",
+              "leftValue": "={{ $json.is_psd }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "56260090-8d26-46af-afcc-7d7f23dc0a02",
+      "name": "Is PSD File?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        240,
+        560
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://teams_notifier:8004/notify/psd_started",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {}
+          ]
+        },
+        "options": {
+          "timeout": 5000
+        }
+      },
+      "id": "c8e463ba-99b5-4979-b0a8-2e6cbf71ce33",
+      "name": "Notify PSD Processing Start",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [
+        480,
+        460
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://image_processor:8003/process",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {}
+          ]
+        },
+        "options": {
+          "timeout": 300000
+        }
+      },
+      "id": "79ff21a0-a9bf-4cbc-bdac-c9c61cfe3ce4",
+      "name": "Process PSD File",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [
+        680,
+        460
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://teams_notifier:8004/notify/psd_complete",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {}
+          ]
+        },
+        "options": {
+          "timeout": 5000
+        }
+      },
+      "id": "98a49f54-621a-4017-8af4-a21cc12a25cc",
+      "name": "Teams Notify - PSD Complete",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [
+        900,
+        460
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://ml_processor:8001/remove_background",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"input_path\": \"{{ $json.file_path }}\",\n  \"enhance_input\": true,\n  \"post_process\": true,\n  \"model_name\": \"isnet-general-use\"\n}",
+        "options": {
+          "timeout": 120000
+        }
+      },
+      "id": "c82d95b8-8952-4c0d-b095-d1592b6df74c",
+      "name": "Remove Background",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [
+        480,
+        660
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://teams_notifier:8004/notify/bg_removal_complete",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {}
+          ]
+        },
+        "options": {
+          "timeout": 5000
+        }
+      },
+      "id": "54f7d5cd-bcd7-4ad0-bf3c-1bae95eb36a8",
+      "name": "Teams Notify - BG Removal Complete",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [
+        680,
+        660
+      ]
+    },
+    {
+      "parameters": {
+        "triggerTimes": {
+          "item": [
+            {
+              "mode": "everyMinute"
+            }
+          ]
+        }
+      },
+      "id": "1279a671-0573-4c5a-ba5e-d5e7f6871f75",
+      "name": "Decision Monitor",
+      "type": "n8n-nodes-base.cron",
+      "typeVersion": 1,
+      "position": [
+        -420,
+        860
+      ]
+    },
+    {
+      "parameters": {
+        "url": "http://web_server:8080/api/decisions/pending",
+        "options": {
+          "timeout": 10000
+        }
+      },
+      "id": "c6111523-4d2b-4dc9-92f5-fbcd1e7a1e0f",
+      "name": "Check for Decisions",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [
+        -200,
+        860
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Process decisions from web server API response\nconst response = $input.first().json;\n\n// Check if we have any decisions\nif (!response.decisions || response.decisions.length === 0) {\n  return [];\n}\n\nconst results = [];\n\nfor (const decision of response.decisions) {\n  results.push({\n    json: {\n      decision_file: decision.decision_file,\n      action: decision.action,\n      file_id: decision.file_id,\n      timestamp: decision.timestamp,\n      decision_id: decision.decision_id\n    }\n  });\n}\n\nreturn results;"
+      },
+      "id": "94f1b618-64ec-4617-85fb-5881724ec801",
+      "name": "Process Decisions",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        20,
+        860
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "condition_1",
+              "leftValue": "={{ $json.action }}",
+              "rightValue": "approve",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "b79078a9-9977-4bc6-a98d-5d26c1c9991b",
+      "name": "Is Approved?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        240,
+        860
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://image_processor:8003/process",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {}
+          ]
+        },
+        "options": {
+          "timeout": 300000
+        }
+      },
+      "id": "3d07bcfb-4185-476a-b08b-3c01375aa3fd",
+      "name": "Process Approved Image",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [
+        480,
+        840
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://teams_notifier:8004/notify/processing_approved",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {}
+          ]
+        },
+        "options": {
+          "timeout": 5000
+        }
+      },
+      "id": "89b532ec-4279-4d0f-af87-62bf78f74a6c",
+      "name": "Teams Notify - Processing Complete",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [
+        680,
+        840
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "condition_1",
+              "leftValue": "={{ $json.action }}",
+              "rightValue": "retry",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "1573f97a-ced5-4650-813d-5cfc2d651711",
+      "name": "Is Retry?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        240,
+        1010
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://ml_processor:8001/retry_background_removal",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {}
+          ]
+        },
+        "options": {
+          "timeout": 120000
+        }
+      },
+      "id": "1a25a041-c9bc-4d6b-942a-96ae2294aaf2",
+      "name": "Retry Background Removal",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [
+        480,
+        1040
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://teams_notifier:8004/notify/processing_rejected",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {}
+          ]
+        },
+        "options": {
+          "timeout": 5000
+        }
+      },
+      "id": "75260280-5c40-4e44-a214-43ec2c8e57e4",
+      "name": "Handle Rejection",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [
+        480,
+        1220
+      ]
+    },
+    {
+      "parameters": {
+        "triggerTimes": {
+          "item": [
+            {}
+          ]
+        }
+      },
+      "id": "870a66dc-513b-4975-9200-60e3ad21c795",
+      "name": "Daily Summary Trigger",
+      "type": "n8n-nodes-base.cron",
+      "typeVersion": 1,
+      "position": [
+        -420,
+        1260
+      ]
+    },
+    {
+      "parameters": {
+        "url": "http://web_server:8080/api/status",
+        "options": {
+          "timeout": 10000
+        }
+      },
+      "id": "cb7c7699-877c-42ab-b4c0-2ea08e883eca",
+      "name": "Get Daily Stats",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [
+        -200,
+        1260
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://teams_notifier:8004/notify/daily_summary",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {}
+          ]
+        },
+        "options": {
+          "timeout": 5000
+        }
+      },
+      "id": "7885a2e3-f2db-4cf3-b646-88504902f166",
+      "name": "Teams Notify - Daily Summary",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [
+        20,
+        1260
+      ]
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "File Monitor Trigger": {
+      "main": [
+        [
+          {
+            "node": "Check for New Files",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check for New Files": {
+      "main": [
+        [
+          {
+            "node": "Process File List",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Process File List": {
+      "main": [
+        [
+          {
+            "node": "Is PSD File?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Is PSD File?": {
+      "main": [
+        [
+          {
+            "node": "Notify PSD Processing Start",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Remove Background",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Notify PSD Processing Start": {
+      "main": [
+        [
+          {
+            "node": "Process PSD File",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Process PSD File": {
+      "main": [
+        [
+          {
+            "node": "Teams Notify - PSD Complete",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Remove Background": {
+      "main": [
+        [
+          {
+            "node": "Teams Notify - BG Removal Complete",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Decision Monitor": {
+      "main": [
+        [
+          {
+            "node": "Check for Decisions",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check for Decisions": {
+      "main": [
+        [
+          {
+            "node": "Process Decisions",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Process Decisions": {
+      "main": [
+        [
+          {
+            "node": "Is Approved?",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Is Retry?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Is Approved?": {
+      "main": [
+        [
+          {
+            "node": "Process Approved Image",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Handle Rejection",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Process Approved Image": {
+      "main": [
+        [
+          {
+            "node": "Teams Notify - Processing Complete",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Is Retry?": {
+      "main": [
+        [
+          {
+            "node": "Retry Background Removal",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Retry Background Removal": {
+      "main": [
+        [
+          {
+            "node": "Teams Notify - BG Removal Complete",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Daily Summary Trigger": {
+      "main": [
+        [
+          {
+            "node": "Get Daily Stats",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Daily Stats": {
+      "main": [
+        [
+          {
+            "node": "Teams Notify - Daily Summary",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "11186366-5415-4137-a848-5cb5ff1ef5d9",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "314b33b4149984d2c080723c1dd638ceb3eaf063eec8407ca0432f979aab3389"
+  },
+  "id": "OU3wVqG0G7phd61D",
+  "tags": [
+    {
+      "createdAt": "2025-07-24T19:38:39.649Z",
+      "updatedAt": "2025-07-24T19:38:39.649Z",
+      "id": "TP5sXYHHQWJtHBSJ",
+      "name": "Crown Automotive"
+    }
+  ]
+}

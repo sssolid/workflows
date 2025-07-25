@@ -1,0 +1,26 @@
+# Crown Automotive FileMaker Database Connection
+# Copy this file to filemaker.dsn and update with your actual database credentials
+#
+# FileMaker ODBC Connection String
+
+DRIVER={FileMaker ODBC};
+SERVER=192.168.10.216;
+DATABASE=CrownMasterDatabase;
+UID=
+PWD=
+PORT=
+
+# Connection Options
+# Uncomment and modify these if needed:
+# SSL=1;
+# CHARSET=UTF-8;
+# TIMEOUT=30;
+
+# Notes:
+# - Replace 'your-filemaker-server.company.com' with your actual FileMaker server hostname or IP
+# - Replace 'Crown_Automotive_Master' with your actual database name
+# - Replace 'image_processor_user' with a dedicated user account for the image processing system
+# - Replace 'your_secure_password_here' with the actual password
+# - Port 2399 is the default FileMaker ODBC port, change if different
+# - Ensure the user account has read access to the Master table
+# - Consider creating a dedicated user with minimal required permissions for security

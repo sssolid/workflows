@@ -1,0 +1,37 @@
+# File Monitor Container - Alpine base for lightweight monitoring
+FROM python:3.11-alpine
+
+# Install system dependencies
+RUN apk add --no-cache \
+    wget \
+    curl
+
+# Create working directory
+WORKDIR /app
+
+# Copy monitor requirements
+COPY requirements.monitor.txt /tmp/requirements.monitor.txt
+
+# Install Python packages
+RUN pip install --no-cache-dir -r /tmp/requirements.monitor.txt
+
+# Create directories
+RUN mkdir -p /scripts /config /data
+
+# Copy monitor files
+COPY scripts/file_monitor.py /scripts/
+COPY scripts/monitor_server.py /scripts/
+COPY scripts/utils/__init__.py /scripts/utils/
+
+# Set permissions
+RUN chmod +x /scripts/*.py
+
+# Expose port for monitor API
+EXPOSE 8002
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=10s --start-period=30s --retries=3 \
+    CMD wget --quiet --tries=1 --spider http://localhost:8002/health || exit 1
+
+# Run monitor server
+CMD ["python3", "/scripts/monitor_server.py"]

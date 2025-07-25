@@ -1,0 +1,481 @@
+# Image Output Format Specifications
+# Each format defines how the processed image should be saved
+
+# Original cropped formats (PNG/TIFF with transparency)
+- name: original_300dpi_png
+  format: PNG
+  dpi: 300
+  background: null
+  resize: null
+  extent: null
+  border: [0, 0]
+  mode: RGBA
+  brand_icon: null
+  icon_offset: [15, 15]
+  watermark: null
+
+- name: original_300dpi_tiff
+  format: TIFF
+  dpi: 300
+  background: null
+  resize: null
+  extent: null
+  border: [0, 0]
+  mode: RGBA
+  brand_icon: null
+  icon_offset: [15, 15]
+  watermark: null
+
+# High resolution formats (2500px)
+- name: 2500_longest_300dpi_tiff
+  format: TIFF
+  dpi: 300
+  background: white
+  resize_longest: 2500
+  extent: null
+  border: [15, 15]
+  mode: RGB
+  brand_icon: null
+  icon_offset: [15, 15]
+  watermark: null
+
+- name: 2500_longest_300dpi_jpeg
+  format: JPEG
+  dpi: 300
+  background: white
+  resize_longest: 2500
+  extent: null
+  border: [15, 15]
+  mode: RGB
+  brand_icon: null
+  icon_offset: [15, 15]
+  watermark: null
+
+# Fixed size 2500x2500 formats
+- name: 2500x2500_300dpi_tiff
+  format: TIFF
+  dpi: 300
+  background: white
+  resize: [2500, 2500]
+  extent: [2500, 2500]
+  border: [15, 15]
+  mode: RGB
+  brand_icon: null
+  icon_offset: [15, 15]
+  watermark: null
+
+- name: watermark_2500x2500_300dpi_tiff
+  format: TIFF
+  dpi: 300
+  background: white
+  resize: [2500, 2500]
+  extent: [2500, 2500]
+  border: [15, 15]
+  mode: RGB
+  brand_icon: null
+  icon_offset: [15, 15]
+  watermark: /assets/watermark_crown.png
+
+- name: 2500x2500_300dpi_jpeg
+  format: JPEG
+  dpi: 300
+  background: white
+  resize: [2500, 2500]
+  extent: [2500, 2500]
+  border: [15, 15]
+  mode: RGB
+  brand_icon: null
+  icon_offset: [15, 15]
+  watermark: null
+
+- name: watermark_2500x2500_300dpi_jpeg
+  format: JPEG
+  dpi: 300
+  background: white
+  resize: [2500, 2500]
+  extent: [2500, 2500]
+  border: [15, 15]
+  mode: RGB
+  brand_icon: null
+  icon_offset: [15, 15]
+  watermark: /assets/watermark_crown.png
+
+# Medium resolution formats (1500px)
+- name: 1500_longest_300dpi_tiff
+  format: TIFF
+  dpi: 300
+  background: white
+  resize_longest: 1500
+  extent: null
+  border: [15, 15]
+  mode: RGB
+  brand_icon: null
+  icon_offset: [15, 15]
+  watermark: null
+
+- name: watermark_1500_longest_300dpi_tiff
+  format: TIFF
+  dpi: 300
+  background: white
+  resize_longest: 1500
+  extent: null
+  border: [15, 15]
+  mode: RGB
+  brand_icon: null
+  icon_offset: [15, 15]
+  watermark: /assets/watermark_crown.png
+
+- name: 1500_longest_300dpi_jpeg
+  format: JPEG
+  dpi: 300
+  background: white
+  resize_longest: 1500
+  extent: null
+  border: [15, 15]
+  mode: RGB
+  brand_icon: null
+  icon_offset: [15, 15]
+  watermark: null
+
+- name: watermark_1500_longest_300dpi_jpeg
+  format: JPEG
+  dpi: 300
+  background: white
+  resize_longest: 1500
+  extent: null
+  border: [15, 15]
+  mode: RGB
+  brand_icon: null
+  icon_offset: [15, 15]
+  watermark: /assets/watermark_crown.png
+
+# Fixed size 1500x1500 formats
+- name: 1500x1500_300dpi_tiff
+  format: TIFF
+  dpi: 300
+  background: white
+  resize: [1500, 1500]
+  extent: [1500, 1500]
+  border: [15, 15]
+  mode: RGB
+  brand_icon: null
+  icon_offset: [15, 15]
+  watermark: null
+
+- name: watermark_1500x1500_300dpi_tiff
+  format: TIFF
+  dpi: 300
+  background: white
+  resize: [1500, 1500]
+  extent: [1500, 1500]
+  border: [15, 15]
+  mode: RGB
+  brand_icon: null
+  icon_offset: [15, 15]
+  watermark: /assets/watermark_crown.png
+
+- name: 1500x1500_300dpi_jpeg
+  format: JPEG
+  dpi: 300
+  background: white
+  resize: [1500, 1500]
+  extent: [1500, 1500]
+  border: [15, 15]
+  mode: RGB
+  brand_icon: null
+  icon_offset: [15, 15]
+  watermark: null
+
+- name: watermark_1500x1500_300dpi_jpeg
+  format: JPEG
+  dpi: 300
+  background: white
+  resize: [1500, 1500]
+  extent: [1500, 1500]
+  border: [15, 15]
+  mode: RGB
+  brand_icon: null
+  icon_offset: [15, 15]
+  watermark: /assets/watermark_crown.png
+
+# Web-ready formats (1000px, 72 DPI)
+- name: 1000x1000_72dpi_jpeg
+  format: JPEG
+  dpi: 72
+  background: white
+  resize: [1000, 1000]
+  extent: [1000, 1000]
+  border: [15, 15]
+  mode: RGB
+  brand_icon: null
+  icon_offset: [15, 15]
+  watermark: null
+
+- name: watermark_1000x1000_72dpi_jpeg
+  format: JPEG
+  dpi: 72
+  background: white
+  resize: [1000, 1000]
+  extent: [1000, 1000]
+  border: [15, 15]
+  mode: RGB
+  brand_icon: null
+  icon_offset: [15, 15]
+  watermark: /assets/watermark_crown.png
+
+- name: 1000_longest_72dpi_jpeg
+  format: JPEG
+  dpi: 72
+  background: white
+  resize_longest: 1000
+  extent: null
+  border: [15, 15]
+  mode: RGB
+  brand_icon: null
+  icon_offset: [15, 15]
+  watermark: null
+
+- name: watermark_1000_longest_72dpi_jpeg
+  format: JPEG
+  dpi: 72
+  background: white
+  resize_longest: 1000
+  extent: null
+  border: [15, 15]
+  mode: RGB
+  brand_icon: null
+  icon_offset: [15, 15]
+  watermark: /assets/watermark_crown.png
+
+# Medium web formats (720px)
+- name: 720x720_72dpi_jpeg
+  format: JPEG
+  dpi: 72
+  background: white
+  resize: [720, 720]
+  extent: [720, 720]
+  border: [15, 15]
+  mode: RGB
+  brand_icon: null
+  icon_offset: [15, 15]
+  watermark: null
+
+- name: watermark_720x720_72dpi_jpeg
+  format: JPEG
+  dpi: 72
+  background: white
+  resize: [720, 720]
+  extent: [720, 720]
+  border: [15, 15]
+  mode: RGB
+  brand_icon: null
+  icon_offset: [15, 15]
+  watermark: /assets/watermark_crown.png
+
+- name: 720_longest_72dpi_jpeg
+  format: JPEG
+  dpi: 72
+  background: white
+  resize_longest: 720
+  extent: null
+  border: [15, 15]
+  mode: RGB
+  brand_icon: null
+  icon_offset: [15, 15]
+  watermark: null
+
+- name: watermark_720_longest_72dpi_jpeg
+  format: JPEG
+  dpi: 72
+  background: white
+  resize_longest: 720
+  extent: null
+  border: [15, 15]
+  mode: RGB
+  brand_icon: null
+  icon_offset: [15, 15]
+  watermark: /assets/watermark_crown.png
+
+# Standard web formats (600px)
+- name: 600x600_72dpi_jpeg
+  format: JPEG
+  dpi: 72
+  background: white
+  resize: [600, 600]
+  extent: [600, 600]
+  border: [15, 15]
+  mode: RGB
+  brand_icon: null
+  icon_offset: [15, 15]
+  watermark: null
+
+- name: watermark_600x600_72dpi_jpeg
+  format: JPEG
+  dpi: 72
+  background: white
+  resize: [600, 600]
+  extent: [600, 600]
+  border: [15, 15]
+  mode: RGB
+  brand_icon: null
+  icon_offset: [15, 15]
+  watermark: /assets/watermark_crown.png
+
+- name: 600_longest_72dpi_jpeg
+  format: JPEG
+  dpi: 72
+  background: white
+  resize_longest: 600
+  extent: null
+  border: [15, 15]
+  mode: RGB
+  brand_icon: null
+  icon_offset: [15, 15]
+  watermark: null
+
+- name: watermark_600_longest_72dpi_jpeg
+  format: JPEG
+  dpi: 72
+  background: white
+  resize_longest: 600
+  extent: null
+  border: [15, 15]
+  mode: RGB
+  brand_icon: null
+  icon_offset: [15, 15]
+  watermark: /assets/watermark_crown.png
+
+# Special PNG formats with transparency and icons
+- name: 600x390_72dpi_png_icon
+  format: PNG
+  dpi: 72
+  background: null
+  resize: [580, 370]
+  extent: [600, 390]
+  border: [10, 10]
+  mode: RGBA
+  brand_icon: /assets/icon_crown.png
+  icon_offset: [15, 15]
+  watermark: null
+
+- name: watermark_600x390_72dpi_png_icon
+  format: PNG
+  dpi: 72
+  background: null
+  resize: [580, 370]
+  extent: [600, 390]
+  border: [10, 10]
+  mode: RGBA
+  brand_icon: /assets/icon_crown.png
+  icon_offset: [15, 15]
+  watermark: /assets/watermark_crown.png
+
+- name: 600x390_72dpi_png
+  format: PNG
+  dpi: 72
+  background: null
+  resize: [580, 370]
+  extent: [600, 390]
+  border: [10, 10]
+  mode: RGBA
+  brand_icon: null
+  icon_offset: [15, 15]
+  watermark: null
+
+- name: watermark_600x390_72dpi_png
+  format: PNG
+  dpi: 72
+  background: null
+  resize: [580, 370]
+  extent: [600, 390]
+  border: [10, 10]
+  mode: RGBA
+  brand_icon: null
+  icon_offset: [15, 15]
+  watermark: /assets/watermark_crown.png
+
+# Small formats
+- name: 300x200_72dpi_jpeg
+  format: JPEG
+  dpi: 72
+  background: white
+  resize: [300, 200]
+  extent: [300, 200]
+  border: [10, 10]
+  mode: RGB
+  brand_icon: null
+  icon_offset: [15, 15]
+  watermark: null
+
+- name: watermark_300x200_72dpi_jpeg
+  format: JPEG
+  dpi: 72
+  background: white
+  resize: [300, 200]
+  extent: [300, 200]
+  border: [10, 10]
+  mode: RGB
+  brand_icon: null
+  icon_offset: [15, 15]
+  watermark: /assets/watermark_crown.png
+
+# Thumbnail formats
+- name: 128x128_72dpi_jpeg
+  format: JPEG
+  dpi: 72
+  background: white
+  resize: [128, 128]
+  extent: [128, 128]
+  border: [5, 5]
+  mode: RGB
+  brand_icon: null
+  icon_offset: [15, 15]
+  watermark: null
+
+- name: watermark_128x128_72dpi_jpeg
+  format: JPEG
+  dpi: 72
+  background: white
+  resize: [128, 128]
+  extent: [128, 128]
+  border: [5, 5]
+  mode: RGB
+  brand_icon: null
+  icon_offset: [15, 15]
+  watermark: /assets/watermark_crown.png
+
+- name: 64x64_72dpi_jpeg
+  format: JPEG
+  dpi: 72
+  background: white
+  resize: [64, 64]
+  extent: [64, 64]
+  border: [5, 5]
+  mode: RGB
+  brand_icon: null
+  icon_offset: [15, 15]
+  watermark: null
+
+- name: watermark_64x64_72dpi_jpeg
+  format: JPEG
+  dpi: 72
+  background: white
+  resize: [64, 64]
+  extent: [64, 64]
+  border: [5, 5]
+  mode: RGB
+  brand_icon: null
+  icon_offset: [15, 15]
+  watermark: /assets/watermark_crown.png
+
+- name: 32x32_72dpi_jpeg
+  format: JPEG
+  dpi: 72
+  background: white
+  resize: [32, 32]
+  extent: [32, 32]
+  border: [1, 1]
+  mode: RGB
+  brand_icon: null
+  icon_offset: [15, 15]
+  watermark: null

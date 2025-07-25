@@ -1,0 +1,864 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>EXIF Editor: {{ filename }} - Crown Automotive</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+            min-height: 100vh;
+        }
+
+        .header {
+            background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%);
+            color: white;
+            padding: 20px;
+            text-align: center;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+
+        .header h1 {
+            font-size: 2em;
+            margin-bottom: 10px;
+            font-weight: 300;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 30px 20px;
+        }
+
+        .back-link {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            color: #007acc;
+            text-decoration: none;
+            font-weight: 500;
+            margin-bottom: 20px;
+            transition: all 0.2s ease;
+        }
+
+        .back-link:hover {
+            color: #0056b3;
+            transform: translateX(-3px);
+        }
+
+        .file-info {
+            background: white;
+            border-radius: 16px;
+            padding: 25px;
+            margin-bottom: 30px;
+            box-shadow: 0 8px 25px rgba(0, 0, 0, 0.1);
+            display: grid;
+            grid-template-columns: auto 1fr;
+            gap: 25px;
+            align-items: start;
+        }
+
+        .file-preview {
+            width: 200px;
+            text-align: center;
+        }
+
+        .file-preview img {
+            width: 100%;
+            height: auto;
+            border-radius: 8px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+            cursor: pointer;
+            transition: transform 0.2s ease;
+        }
+
+        .file-preview img:hover {
+            transform: scale(1.05);
+        }
+
+        .file-details h2 {
+            color: #2c3e50;
+            margin-bottom: 15px;
+            font-size: 1.5em;
+        }
+
+        .file-meta {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+        }
+
+        .meta-item {
+            padding: 12px 15px;
+            background: #f8f9fa;
+            border-radius: 6px;
+            border-left: 3px solid #007acc;
+        }
+
+        .meta-label {
+            font-size: 0.8em;
+            color: #666;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-bottom: 3px;
+        }
+
+        .meta-value {
+            font-weight: 500;
+            color: #2c3e50;
+        }
+
+        .exif-editor {
+            background: white;
+            border-radius: 16px;
+            box-shadow: 0 8px 25px rgba(0, 0, 0, 0.1);
+            overflow: hidden;
+        }
+
+        .editor-header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 20px 25px;
+            display: flex;
+            justify-content: between;
+            align-items: center;
+        }
+
+        .editor-title {
+            font-weight: 600;
+            font-size: 1.2em;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .editor-actions {
+            display: flex;
+            gap: 10px;
+        }
+
+        .tabs {
+            display: flex;
+            background: #f8f9fa;
+            border-bottom: 1px solid #dee2e6;
+        }
+
+        .tab {
+            padding: 15px 25px;
+            background: none;
+            border: none;
+            cursor: pointer;
+            font-weight: 500;
+            color: #666;
+            transition: all 0.2s ease;
+            position: relative;
+        }
+
+        .tab.active {
+            color: #007acc;
+            background: white;
+        }
+
+        .tab.active::after {
+            content: '';
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            height: 2px;
+            background: #007acc;
+        }
+
+        .tab-content {
+            padding: 25px;
+        }
+
+        .tab-panel {
+            display: none;
+        }
+
+        .tab-panel.active {
+            display: block;
+        }
+
+        .form-grid {
+            display: grid;
+            gap: 20px;
+        }
+
+        .form-group {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .form-label {
+            font-weight: 500;
+            color: #2c3e50;
+            font-size: 0.9em;
+        }
+
+        .form-input, .form-textarea {
+            padding: 12px 15px;
+            border: 2px solid #e9ecef;
+            border-radius: 6px;
+            font-size: 0.9em;
+            transition: border-color 0.2s ease;
+            background: white;
+        }
+
+        .form-input:focus, .form-textarea:focus {
+            outline: none;
+            border-color: #007acc;
+            box-shadow: 0 0 0 3px rgba(0, 122, 204, 0.1);
+        }
+
+        .form-textarea {
+            resize: vertical;
+            min-height: 80px;
+        }
+
+        .readonly {
+            background: #f8f9fa;
+            color: #666;
+        }
+
+        .exif-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 0.9em;
+        }
+
+        .exif-table th {
+            background: #f8f9fa;
+            padding: 12px 15px;
+            text-align: left;
+            font-weight: 600;
+            color: #2c3e50;
+            border-bottom: 2px solid #dee2e6;
+        }
+
+        .exif-table td {
+            padding: 12px 15px;
+            border-bottom: 1px solid #dee2e6;
+            vertical-align: top;
+        }
+
+        .exif-table tr:hover {
+            background: #f8f9fa;
+        }
+
+        .tag-name {
+            font-weight: 500;
+            color: #007acc;
+            min-width: 150px;
+        }
+
+        .tag-value {
+            word-break: break-word;
+            font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+            color: #666;
+        }
+
+        .buttons {
+            padding: 25px;
+            background: #f8f9fa;
+            display: flex;
+            justify-content: space-between;
+            gap: 15px;
+            flex-wrap: wrap;
+        }
+
+        .btn {
+            padding: 12px 25px;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-weight: 500;
+            text-decoration: none;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            transition: all 0.2s ease;
+            font-size: 0.9em;
+        }
+
+        .btn:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
+        }
+
+        .btn-primary {
+            background: #007acc;
+            color: white;
+        }
+
+        .btn-success {
+            background: #28a745;
+            color: white;
+        }
+
+        .btn-secondary {
+            background: #6c757d;
+            color: white;
+        }
+
+        .btn-warning {
+            background: #ffc107;
+            color: #212529;
+        }
+
+        .status-message {
+            padding: 15px 20px;
+            margin: 20px 0;
+            border-radius: 6px;
+            font-weight: 500;
+            display: none;
+        }
+
+        .status-success {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+
+        .status-error {
+            background: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+
+        .loading {
+            display: none;
+            text-align: center;
+            padding: 20px;
+        }
+
+        .spinner {
+            display: inline-block;
+            width: 30px;
+            height: 30px;
+            border: 3px solid rgba(0, 122, 204, .3);
+            border-radius: 50%;
+            border-top-color: #007acc;
+            animation: spin 1s ease-in-out infinite;
+        }
+
+        @keyframes spin {
+            to {
+                transform: rotate(360deg);
+            }
+        }
+
+        .help-text {
+            font-size: 0.8em;
+            color: #666;
+            margin-top: 5px;
+            font-style: italic;
+        }
+
+        .changed {
+            background: #fff3cd !important;
+            border-color: #ffc107 !important;
+        }
+
+        @media (max-width: 768px) {
+            .file-info {
+                grid-template-columns: 1fr;
+                text-align: center;
+            }
+
+            .file-preview {
+                width: 100%;
+                max-width: 300px;
+                margin: 0 auto;
+            }
+
+            .tabs {
+                flex-direction: column;
+            }
+
+            .buttons {
+                flex-direction: column;
+            }
+
+            .container {
+                padding: 20px 15px;
+            }
+        }
+    </style>
+</head>
+<body>
+<div class="header">
+    <h1>📊 EXIF Data Editor</h1>
+    <p>View and edit image metadata for {{ filename }}</p>
+</div>
+
+<div class="container">
+    <a href="{{ server_url }}/review/{{ filename|urlencode }}" class="back-link">
+        ← Back to Review
+    </a>
+
+    <div class="file-info">
+        <div class="file-preview">
+            <img id="preview-image"
+                 src="{{ server_url }}/bg_removed/{{ filename|urlencode }}"
+                 alt="{{ filename }}"
+                 onclick="openImageModal(this.src)"
+                 onerror="handleImageError(this)">
+            <p style="margin-top: 10px; font-size: 0.9em; color: #666;">Click to view full size</p>
+        </div>
+
+        <div class="file-details">
+            <h2>{{ filename }}</h2>
+
+            <div class="file-meta">
+                <div class="meta-item">
+                    <div class="meta-label">Part Number</div>
+                    <div class="meta-value">{{ exif_data.part_number or 'Unknown' }}</div>
+                </div>
+
+                <div class="meta-item">
+                    <div class="meta-label">Current Status</div>
+                    <div class="meta-value">Pending Review</div>
+                </div>
+
+                <div class="meta-item">
+                    <div class="meta-label">File Size</div>
+                    <div class="meta-value">{{ exif_data.file_size or 'Unknown' }}</div>
+                </div>
+
+                <div class="meta-item">
+                    <div class="meta-label">Last Modified</div>
+                    <div class="meta-value">{{ timestamp }}</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="status-message" id="status-message"></div>
+
+    <div class="loading" id="loading">
+        <div class="spinner"></div>
+        <p style="margin-top: 10px;">Updating EXIF data...</p>
+    </div>
+
+    <div class="exif-editor">
+        <div class="editor-header">
+            <div class="editor-title">
+                <span>📝</span>
+                <span>Image Metadata Editor</span>
+            </div>
+        </div>
+
+        <div class="tabs">
+            <button class="tab active" onclick="switchTab('basic')">Basic Info</button>
+            <button class="tab" onclick="switchTab('crown')">Crown Metadata</button>
+            <button class="tab" onclick="switchTab('technical')">Technical Data</button>
+            <button class="tab" onclick="switchTab('raw')">Raw EXIF</button>
+        </div>
+
+        <div class="tab-content">
+            <!-- Basic Info Tab -->
+            <div class="tab-panel active" id="basic-panel">
+                <form id="basic-form">
+                    <div class="form-grid">
+                        <div class="form-group">
+                            <label class="form-label">Title/Caption</label>
+                            <input type="text" class="form-input" id="title" name="title"
+                                   value="{{ exif_data.exif.Caption or exif_data.exif.Title or '' }}"
+                                   placeholder="Enter image title or caption">
+                            <div class="help-text">This will be used as the image caption and title</div>
+                        </div>
+
+                        <div class="form-group">
+                            <label class="form-label">Description</label>
+                            <textarea class="form-textarea" id="description" name="description"
+                                      placeholder="Enter detailed description">{{ exif_data.exif.Description or '' }}</textarea>
+                            <div class="help-text">Detailed description of the part or image</div>
+                        </div>
+
+                        <div class="form-group">
+                            <label class="form-label">Keywords</label>
+                            <input type="text" class="form-input" id="keywords" name="keywords"
+                                   value="{{ exif_data.exif.Keywords or '' }}"
+                                   placeholder="keyword1, keyword2, keyword3">
+                            <div class="help-text">Comma-separated keywords for searchability</div>
+                        </div>
+
+                        <div class="form-group">
+                            <label class="form-label">Author</label>
+                            <input type="text" class="form-input" id="author" name="author"
+                                   value="{{ exif_data.exif.Author or 'Crown Automotive Sales Co., Inc.' }}">
+                            <div class="help-text">Image author or photographer</div>
+                        </div>
+
+                        <div class="form-group">
+                            <label class="form-label">Copyright</label>
+                            <input type="text" class="form-input" id="copyright" name="copyright"
+                                   value="{{ exif_data.exif.Copyright or '(c) Crown Automotive Sales Co., Inc.' }}">
+                            <div class="help-text">Copyright information</div>
+                        </div>
+                    </div>
+                </form>
+            </div>
+
+            <!-- Crown Metadata Tab -->
+            <div class="tab-panel" id="crown-panel">
+                <form id="crown-form">
+                    <div class="form-grid">
+                        <div class="form-group">
+                            <label class="form-label">Part Number</label>
+                            <input type="text" class="form-input" id="part-number" name="part_number"
+                                   value="{{ exif_data.part_number or '' }}"
+                                   placeholder="Enter Crown part number">
+                            <div class="help-text">Crown Automotive part number</div>
+                        </div>
+
+                        <div class="form-group">
+                            <label class="form-label">Part Brand</label>
+                            <input type="text" class="form-input" id="part-brand" name="part_brand"
+                                   value="{{ exif_data.part_brand or 'Crown Automotive' }}">
+                            <div class="help-text">Brand or manufacturer</div>
+                        </div>
+
+                        <div class="form-group">
+                            <label class="form-label">Product Category</label>
+                            <input type="text" class="form-input" id="category" name="category"
+                                   value="{{ exif_data.category or '' }}"
+                                   placeholder="e.g., Engine, Transmission, Suspension">
+                            <div class="help-text">Product category for organization</div>
+                        </div>
+
+                        <div class="form-group">
+                            <label class="form-label">Vehicle Applications</label>
+                            <textarea class="form-textarea" id="applications" name="applications"
+                                      placeholder="e.g., Jeep Wrangler JK 2007-2018, Cherokee XJ 1984-2001">{{ exif_data.applications or '' }}</textarea>
+                            <div class="help-text">Compatible vehicles and years</div>
+                        </div>
+
+                        <div class="form-group">
+                            <label class="form-label">Product Notes</label>
+                            <textarea class="form-textarea" id="notes" name="notes"
+                                      placeholder="Special notes, installation tips, etc.">{{ exif_data.notes or '' }}</textarea>
+                            <div class="help-text">Additional notes about the product</div>
+                        </div>
+                    </div>
+                </form>
+            </div>
+
+            <!-- Technical Data Tab -->
+            <div class="tab-panel" id="technical-panel">
+                <form id="technical-form">
+                    <div class="form-grid">
+                        <div class="form-group">
+                            <label class="form-label">Camera Make</label>
+                            <input type="text" class="form-input" id="camera-make" name="camera_make"
+                                   value="{{ exif_data.exif.Make or '' }}"
+                                   placeholder="e.g., Canon, Nikon">
+                        </div>
+
+                        <div class="form-group">
+                            <label class="form-label">Camera Model</label>
+                            <input type="text" class="form-input" id="camera-model" name="camera_model"
+                                   value="{{ exif_data.exif.Model or '' }}"
+                                   placeholder="e.g., EOS 5D Mark IV">
+                        </div>
+
+                        <div class="form-group">
+                            <label class="form-label">Software</label>
+                            <input type="text" class="form-input" id="software" name="software"
+                                   value="{{ exif_data.exif.Software or 'Crown Image Processing System' }}">
+                        </div>
+
+                        <div class="form-group">
+                            <label class="form-label">Date/Time</label>
+                            <input type="datetime-local" class="form-input" id="datetime" name="datetime"
+                                   value="{{ exif_data.exif.DateTime or timestamp }}">
+                        </div>
+
+                        <div class="form-group">
+                            <label class="form-label">DPI/Resolution</label>
+                            <input type="number" class="form-input" id="dpi" name="dpi"
+                                   value="{{ exif_data.exif.XResolution or 300 }}"
+                                   min="72" max="600">
+                            <div class="help-text">Dots per inch (72 for web, 300 for print)</div>
+                        </div>
+                    </div>
+                </form>
+            </div>
+
+            <!-- Raw EXIF Tab -->
+            <div class="tab-panel" id="raw-panel">
+                <table class="exif-table">
+                    <thead>
+                    <tr>
+                        <th>EXIF Tag</th>
+                        <th>Value</th>
+                    </tr>
+                    </thead>
+                    <tbody>
+                    {% if exif_data.exif %}
+                    {% for tag, value in exif_data.exif.items() %}
+                    <tr>
+                        <td class="tag-name">{{ tag }}</td>
+                        <td class="tag-value">{{ value }}</td>
+                    </tr>
+                    {% endfor %}
+                    {% else %}
+                    <tr>
+                        <td colspan="2" style="text-align: center; color: #666; padding: 30px;">
+                            No EXIF data available
+                        </td>
+                    </tr>
+                    {% endif %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <div class="buttons">
+            <div>
+                <button type="button" class="btn btn-success" onclick="saveChanges()">
+                    💾 Save Changes
+                </button>
+
+                <button type="button" class="btn btn-warning" onclick="resetChanges()">
+                    🔄 Reset to Original
+                </button>
+            </div>
+
+            <div>
+                <a href="{{ server_url }}/review/{{ filename|urlencode }}" class="btn btn-primary">
+                    🔍 Back to Review
+                </a>
+
+                <a href="{{ server_url }}/" class="btn btn-secondary">
+                    📈 Dashboard
+                </a>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Image Modal -->
+<div style="display: none; position: fixed; z-index: 1000; left: 0; top: 0; width: 100%; height: 100%; background-color: rgba(0,0,0,0.9); justify-content: center; align-items: center;"
+     id="imageModal" onclick="closeImageModal()">
+        <span style="position: absolute; top: 20px; right: 30px; color: white; font-size: 40px; cursor: pointer;"
+              onclick="closeImageModal()">&times;</span>
+    <img id="modalImage" src="" alt="Full size image" style="max-width: 90%; max-height: 90%; object-fit: contain;">
+</div>
+
+<script>
+    let originalData = {};
+    let hasChanges = false;
+    const baseFilename = '{{ filename }}'.replace('_bg_removed', '').replace('.png', '');
+    const serverUrl = '{{ server_url }}';
+
+    function handleImageError(img) {
+        console.warn('Failed to load preview image:', img.src);
+
+        // Try original image instead
+        const originalUrl = `${serverUrl}/originals/${encodeURIComponent('{{ filename|urlencode }}')}`;
+        if (originalUrl !== img.src) {
+            img.src = originalUrl;
+            return;
+        }
+
+        // If that fails, try the base filename with _bg_removed.png
+        const bgRemovedUrl = `${serverUrl}/bg_removed/${encodeURIComponent(baseFilename + '_bg_removed.png')}`;
+        if (bgRemovedUrl !== img.src) {
+            img.src = bgRemovedUrl;
+            return;
+        }
+
+        // If all fail, show placeholder
+        img.style.display = 'none';
+        img.parentElement.innerHTML += '<div style="padding: 40px; color: #666; text-align: center;">Image not found</div>';
+    }
+
+    // Store original form data
+    document.addEventListener('DOMContentLoaded', function () {
+        captureOriginalData();
+        setupChangeTracking();
+    });
+
+    function captureOriginalData() {
+        const forms = ['basic-form', 'crown-form', 'technical-form'];
+        forms.forEach(formId => {
+            const form = document.getElementById(formId);
+            if (form) {
+                const formData = new FormData(form);
+                originalData[formId] = Object.fromEntries(formData);
+            }
+        });
+    }
+
+    function setupChangeTracking() {
+        const inputs = document.querySelectorAll('.form-input, .form-textarea');
+        inputs.forEach(input => {
+            input.addEventListener('input', function () {
+                markAsChanged(this);
+                hasChanges = true;
+            });
+        });
+    }
+
+    function markAsChanged(input) {
+        input.classList.add('changed');
+    }
+
+    function switchTab(tabName) {
+        // Update tab buttons
+        document.querySelectorAll('.tab').forEach(tab => tab.classList.remove('active'));
+        event.target.classList.add('active');
+
+        // Update tab panels
+        document.querySelectorAll('.tab-panel').forEach(panel => panel.classList.remove('active'));
+        document.getElementById(tabName + '-panel').classList.add('active');
+    }
+
+    function saveChanges() {
+        if (!hasChanges) {
+            showStatus('No changes to save', 'info');
+            return;
+        }
+
+        const loading = document.getElementById('loading');
+        const buttons = document.querySelector('.buttons');
+
+        // Show loading
+        loading.style.display = 'block';
+        buttons.style.display = 'none';
+
+        // Collect all form data
+        const allData = {};
+        const forms = ['basic-form', 'crown-form', 'technical-form'];
+
+        forms.forEach(formId => {
+            const form = document.getElementById(formId);
+            if (form) {
+                const formData = new FormData(form);
+                Object.assign(allData, Object.fromEntries(formData));
+            }
+        });
+
+        // Send update request
+        fetch('/api/exif/update', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                filename: '{{ filename }}',
+                exif_data: allData
+            })
+        })
+                .then(response => response.json())
+                .then(data => {
+                    loading.style.display = 'none';
+                    buttons.style.display = 'flex';
+
+                    if (data.status === 'success') {
+                        showStatus('✅ EXIF data updated successfully!', 'success');
+                        hasChanges = false;
+
+                        // Remove changed styling
+                        document.querySelectorAll('.changed').forEach(el => {
+                            el.classList.remove('changed');
+                        });
+
+                        // Update original data
+                        captureOriginalData();
+
+                    } else {
+                        showStatus(`❌ Error: ${data.error || 'Failed to update EXIF data'}`, 'error');
+                    }
+                })
+                .catch(error => {
+                    loading.style.display = 'none';
+                    buttons.style.display = 'flex';
+                    showStatus(`❌ Network error: ${error.message}`, 'error');
+                });
+    }
+
+    function resetChanges() {
+        if (!hasChanges) {
+            showStatus('No changes to reset', 'info');
+            return;
+        }
+
+        if (confirm('Are you sure you want to reset all changes?')) {
+            // Reset all forms
+            const forms = ['basic-form', 'crown-form', 'technical-form'];
+            forms.forEach(formId => {
+                const form = document.getElementById(formId);
+                if (form && originalData[formId]) {
+                    Object.keys(originalData[formId]).forEach(key => {
+                        const input = form.querySelector(`[name="${key}"]`);
+                        if (input) {
+                            input.value = originalData[formId][key];
+                            input.classList.remove('changed');
+                        }
+                    });
+                }
+            });
+
+            hasChanges = false;
+            showStatus('Changes reset to original values', 'info');
+        }
+    }
+
+    function showStatus(message, type) {
+        const statusEl = document.getElementById('status-message');
+        statusEl.textContent = message;
+        statusEl.className = `status-message status-${type}`;
+        statusEl.style.display = 'block';
+
+        setTimeout(() => {
+            statusEl.style.display = 'none';
+        }, 5000);
+    }
+
+    function openImageModal(src) {
+        const modal = document.getElementById('imageModal');
+        const modalImg = document.getElementById('modalImage');
+
+        modal.style.display = 'flex';
+        modalImg.src = src;
+        document.body.style.overflow = 'hidden';
+    }
+
+    function closeImageModal() {
+        const modal = document.getElementById('imageModal');
+        modal.style.display = 'none';
+        document.body.style.overflow = '';
+    }
+
+    // Warn before leaving if there are unsaved changes
+    window.addEventListener('beforeunload', function (e) {
+        if (hasChanges) {
+            e.preventDefault();
+            e.returnValue = '';
+        }
+    });
+
+    // Keyboard shortcuts
+    document.addEventListener('keydown', function (e) {
+        if (e.ctrlKey && e.key === 's') {
+            e.preventDefault();
+            saveChanges();
+        } else if (e.key === 'Escape') {
+            closeImageModal();
+        }
+    });
+</script>
+</body>
+</html>
