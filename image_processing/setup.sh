@@ -1,12 +1,12 @@
 #!/bin/bash
-
-# Crown Automotive Image Processing System Setup Script
-# This script helps set up the image processing system with proper permissions and configuration
+# ===== setup.sh =====
+# Crown Automotive Image Processing System Setup Script - Clean Architecture
+# This script helps set up the clean architecture image processing system
 
 set -e
 
-echo "🖼️  Crown Automotive Image Processing System Setup"
-echo "=================================================="
+echo "🖼️  Crown Automotive Image Processing System - Clean Architecture Setup"
+echo "======================================================================"
 
 # Colors for output
 RED='\033[0;31m'
@@ -60,10 +60,23 @@ else
     print_status "Docker Compose found: $(docker-compose --version)"
 fi
 
-print_header "Directory Structure Setup"
+print_header "Clean Architecture Structure Setup"
 
-# Create required directories
+# Create the clean architecture directory structure
 DIRECTORIES=(
+    "src/models"
+    "src/services"
+    "src/workflows"
+    "src/utils"
+    "src/config"
+    "src/web"
+    "tests/unit"
+    "tests/integration"
+    "docker"
+    "workflows"
+    "templates"
+    "assets"
+    "config"
     "data/input"
     "data/processing/originals"
     "data/processing/bg_removed"
@@ -74,8 +87,6 @@ DIRECTORIES=(
     "data/logs"
     "data/decisions"
     "data/metadata"
-    "config/models"
-    "local-files"
 )
 
 for dir in "${DIRECTORIES[@]}"; do
@@ -87,7 +98,7 @@ for dir in "${DIRECTORIES[@]}"; do
     fi
 done
 
-# Create production format directories based on output_specs.yaml
+# Create production format directories based on clean architecture
 PRODUCTION_FORMATS=(
     "original_300dpi_png"
     "original_300dpi_tiff"
@@ -126,10 +137,21 @@ done
 print_header "Configuration Files Setup"
 
 # Copy sample configuration files if they don't exist
+if [ ! -f ".env" ]; then
+    if [ -f ".env.sample" ]; then
+        cp ".env.sample" ".env"
+        print_warning "Created .env from sample. Please review and update with your actual values."
+    else
+        print_error "Sample .env file not found. Please create .env manually."
+    fi
+else
+    print_status "Environment file exists"
+fi
+
 if [ ! -f "config/filemaker.dsn" ]; then
     if [ -f "config/filemaker.dsn.sample" ]; then
         cp "config/filemaker.dsn.sample" "config/filemaker.dsn"
-        print_warning "Created config/filemaker.dsn from sample. Please review and update if needed."
+        print_warning "Created config/filemaker.dsn from sample. Please review and update with your database credentials."
     else
         print_error "Sample DSN file not found. Please create config/filemaker.dsn manually."
     fi
@@ -137,9 +159,150 @@ else
     print_status "FileMaker DSN file exists"
 fi
 
-# Check for required asset files
+# Create basic web templates if they don't exist
+if [ ! -f "templates/dashboard.html" ]; then
+    cat > templates/dashboard.html << 'EOF'
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Crown Automotive - Image Processing Dashboard</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        .stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 20px; margin: 20px 0; }
+        .stat-card { padding: 20px; background: #f5f5f5; border-radius: 8px; text-align: center; }
+        .file-list { margin: 20px 0; }
+        .file-item { padding: 10px; border: 1px solid #ddd; margin: 5px 0; border-radius: 4px; }
+        .btn { padding: 8px 16px; background: #007acc; color: white; text-decoration: none; border-radius: 4px; }
+    </style>
+</head>
+<body>
+    <h1>Crown Automotive Image Processing Dashboard</h1>
+
+    <div class="stats">
+        <div class="stat-card">
+            <h3>{{ stats.pending }}</h3>
+            <p>Pending Review</p>
+        </div>
+        <div class="stat-card">
+            <h3>{{ stats.processing }}</h3>
+            <p>Processing</p>
+        </div>
+        <div class="stat-card">
+            <h3>{{ stats.completed }}</h3>
+            <p>Completed</p>
+        </div>
+        <div class="stat-card">
+            <h3>{{ stats.failed }}</h3>
+            <p>Failed</p>
+        </div>
+    </div>
+
+    <h2>Pending Files</h2>
+    <div class="file-list">
+        {% for file in pending_files %}
+        <div class="file-item">
+            <strong>{{ file.filename }}</strong> ({{ file.size_mb }} MB)
+            <a href="{{ file.review_url }}" class="btn">Review</a>
+        </div>
+        {% endfor %}
+    </div>
+
+    <h2>Recently Completed</h2>
+    <div class="file-list">
+        {% for file in completed_files %}
+        <div class="file-item">
+            <strong>{{ file.filename }}</strong> - Completed
+        </div>
+        {% endfor %}
+    </div>
+</body>
+</html>
+EOF
+    print_status "Created basic dashboard template"
+fi
+
+if [ ! -f "templates/review.html" ]; then
+    cat > templates/review.html << 'EOF'
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Review: {{ file.filename }} - Crown Automotive</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        .comparison { display: grid; grid-template-columns: 1fr 1fr; gap: 30px; margin: 30px 0; }
+        .image-panel { text-align: center; padding: 20px; border: 1px solid #ddd; border-radius: 8px; }
+        .buttons { text-align: center; margin: 30px 0; }
+        .btn { padding: 12px 24px; margin: 10px; border: none; border-radius: 6px; cursor: pointer; font-size: 16px; }
+        .approve { background: #28a745; color: white; }
+        .reject { background: #dc3545; color: white; }
+        .retry { background: #ffc107; color: black; }
+    </style>
+</head>
+<body>
+    <h1>Review: {{ file.filename }}</h1>
+
+    <div class="comparison">
+        <div class="image-panel">
+            <h3>Original Image</h3>
+            <img src="{{ server_url }}/originals/{{ file.filename }}" alt="Original" style="max-width: 100%; height: auto;">
+        </div>
+
+        <div class="image-panel">
+            <h3>Background Removed</h3>
+            <img src="{{ server_url }}/bg_removed/{{ file.filename }}" alt="Background Removed" style="max-width: 100%; height: auto;">
+        </div>
+    </div>
+
+    <div class="buttons">
+        <button class="btn approve" onclick="approve()">✅ Approve</button>
+        <button class="btn retry" onclick="retry()">🔄 Retry</button>
+        <button class="btn reject" onclick="reject()">❌ Reject</button>
+    </div>
+
+    <script>
+        function approve() {
+            fetch('/api/approve/{{ file.file_id }}', { method: 'POST' })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        alert('File approved for production processing!');
+                        window.location.href = '/';
+                    } else {
+                        alert('Error: ' + data.error);
+                    }
+                });
+        }
+
+        function reject() {
+            fetch('/api/reject/{{ file.file_id }}', { method: 'POST' })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        alert('File rejected');
+                        window.location.href = '/';
+                    } else {
+                        alert('Error: ' + data.error);
+                    }
+                });
+        }
+
+        function retry() {
+            alert('Retry functionality will be implemented in the full system');
+        }
+    </script>
+</body>
+</html>
+EOF
+    print_status "Created basic review template"
+fi
+
 print_header "Asset Files Check"
 
+# Check for required asset files
 REQUIRED_ASSETS=(
     "assets/watermark_crown.png"
     "assets/icon_crown.png"
@@ -150,7 +313,7 @@ for asset in "${REQUIRED_ASSETS[@]}"; do
         print_warning "Missing asset file: $asset"
         print_warning "Please add your Crown Automotive branding assets"
 
-        # Create placeholder directory
+        # Create placeholder directories
         mkdir -p "$(dirname "$asset")"
 
         # Create placeholder files with instructions
@@ -164,96 +327,16 @@ for asset in "${REQUIRED_ASSETS[@]}"; do
     fi
 done
 
-print_header "Environment Variables Setup"
+print_header "Docker Images Build"
 
-# Check for environment variables
-if [ -z "$TEAMS_WEBHOOK_URL" ]; then
-    print_warning "TEAMS_WEBHOOK_URL environment variable not set"
-    print_warning "Teams notifications will not work until this is configured"
-fi
+# Build the Docker images
+print_status "Building Docker images for clean architecture..."
 
-# Create .env file template if it doesn't exist
-if [ ! -f ".env" ]; then
-    cat > .env << EOF
-# Crown Automotive Image Processing Environment Variables
-# Copy this file and update with your actual values
-
-# Teams Integration
-TEAMS_WEBHOOK_URL=https://your-teams-webhook-url-here
-
-# Server Configuration
-IMAGE_SERVER_HOST=192.168.10.234
-IMAGE_SERVER_PORT=8080
-
-# FileMaker Database
-FILEMAKER_DSN_PATH=/config/filemaker.dsn
-
-# n8n Configuration
-N8N_BASIC_AUTH_PASSWORD=your_secure_n8n_password
-
-# Timezone
-TZ=America/New_York
-EOF
-    print_status "Created .env template file. Please edit with your actual values."
+if docker-compose build; then
+    print_status "Docker images built successfully"
 else
-    print_status "Environment file exists"
-fi
-
-print_header "File Permissions Setup"
-
-# Set appropriate permissions
-chmod +x scripts/*.py
-chmod +x setup.sh
-
-# Set permissions for data directories (for Docker container access)
-chmod -R 755 data/
-chmod -R 755 config/
-chmod -R 755 scripts/
-chmod -R 755 templates/
-
-print_status "File permissions set"
-
-print_header "Docker Configuration"
-
-print_status "Choose deployment architecture:"
-echo "  1. Multi-Container (Recommended) - Microservices with PyTorch support"
-echo "  2. Single Container (Simple) - All-in-one container (limited ML features)"
-echo ""
-
-read -p "Enter choice (1 or 2) [default: 1]: " architecture_choice
-architecture_choice=${architecture_choice:-1}
-
-if [ "$architecture_choice" = "1" ]; then
-    print_status "Using multi-container architecture..."
-    COMPOSE_FILE="docker-compose-multi.yml"
-
-    # Build all containers
-    print_status "Building multi-container images..."
-    if docker-compose -f "$COMPOSE_FILE" build; then
-        print_status "Multi-container images built successfully"
-    else
-        print_error "Failed to build multi-container images"
-        exit 1
-    fi
-
-    print_status "Multi-container setup complete!"
-    print_status "Services will run on ports: 5678 (n8n), 8080 (dashboard), 8001-8004 (APIs)"
-
-else
-    print_status "Using single-container architecture..."
-    COMPOSE_FILE="docker-compose.yml"
-
-    # Build the single container
-    print_status "Building single container image..."
-    if docker-compose -f "$COMPOSE_FILE" build; then
-        print_status "Single container image built successfully"
-    else
-        print_error "Failed to build single container image"
-        exit 1
-    fi
-
-    print_warning "Note: Single container has limited ML capabilities due to Alpine/PyTorch compatibility"
-    print_status "Single container setup complete!"
+    print_error "Failed to build Docker images"
+    exit 1
 fi
 
 print_header "Network Drive Configuration"
@@ -271,49 +354,88 @@ echo "    - /actual/path/to/dropzone:/data/input"
 echo "    - /actual/path/to/processed:/data/production"
 echo "    - /actual/path/to/manual:/data/rejected"
 
-print_header "Final Steps"
+print_header "Configuration Review"
 
 echo ""
-echo "Setup completed! Next steps:"
+echo "Please review and update the following configuration files:"
 echo ""
-echo "1. 📁 Update docker-compose.yml with your network drive paths"
-echo "3. 🔐 Edit config/filemaker.dsn with your database credentials"
-echo "   Note: fmjdbc.jar is required for JDBC fallback connection"
-echo "   Download from FileMaker and place in config/ directory"
-echo "3. 📢 Set your Teams webhook URL in .env file"
-echo "4. 🖼️  Add your branding assets to the assets/ directory"
-echo "5. ⚙️  Review and customize config/server_config.json if needed"
-echo "6. 🚀 Start the system with: docker-compose up -d"
-echo "7. 🌐 Access the dashboard at: http://192.168.10.234:8080"
-echo "8. 🔧 Import the n8n workflow from config/n8n_workflow.json"
+echo "1. 📁 .env - Environment variables and system settings"
+echo "2. 🔐 config/filemaker.dsn - Database connection settings"
+echo "   Note: For JDBC fallback, download fmjdbc.jar from FileMaker and place in config/ directory"
+echo "3. 📢 TEAMS_WEBHOOK_URL in .env - Teams notification webhook"
+echo "4. 🖼️  assets/ directory - Add your Crown Automotive branding assets"
+echo "5. ⚙️  config/output_specs.yaml - Customize image output formats (optional)"
 echo ""
 
-print_status "Setup script completed successfully!"
+print_header "Quick Start Commands"
 
 echo ""
-echo "🔧 Quick Start Commands:"
-if [ "$architecture_choice" = "1" ]; then
-    echo "  Start system:    docker-compose -f docker-compose-multi.yml up -d"
-    echo "  View logs:       docker-compose -f docker-compose-multi.yml logs -f"
-    echo "  Stop system:     docker-compose -f docker-compose-multi.yml down"
-    echo "  Restart:         docker-compose -f docker-compose-multi.yml restart"
-    echo "  Check status:    docker-compose -f docker-compose-multi.yml ps"
-    echo ""
-    echo "📊 Service URLs:"
-    echo "  Dashboard:       http://192.168.10.234:8080"
-    echo "  n8n Workflows:   http://192.168.10.234:5678"
-    echo "  ML Processor:    http://192.168.10.234:8001"
-    echo "  Image Processor: http://192.168.10.234:8003"
-else
-    echo "  Start system:    docker-compose up -d"
-    echo "  View logs:       docker-compose logs -f"
-    echo "  Stop system:     docker-compose down"
-    echo "  Restart:         docker-compose restart"
-    echo ""
-    echo "📊 Service URLs:"
-    echo "  Dashboard:       http://192.168.10.234:8080"
-    echo "  n8n Workflows:   http://192.168.10.234:5678"
-fi
+echo "🚀 Start the system:"
+echo "  docker-compose up -d"
+echo ""
+echo "📊 Check system status:"
+echo "  docker-compose ps"
+echo "  docker-compose logs -f"
+echo ""
+echo "🌐 Access the system:"
+echo "  Dashboard:       http://localhost:8080"
+echo "  n8n Workflows:   http://localhost:5678"
+echo "  ML Processor:    http://localhost:8001"
+echo "  File Monitor:    http://localhost:8002"
+echo "  Image Processor: http://localhost:8003"
+echo "  Teams Notifier:  http://localhost:8004"
+echo ""
+echo "⚙️  Import n8n workflow:"
+echo "  1. Access n8n at http://localhost:5678"
+echo "  2. Import workflows/crown_processing_clean.json"
+echo "  3. Activate the workflow"
+echo ""
+
+print_header "Clean Architecture Benefits"
+
+echo ""
+echo "Your new system includes:"
+echo "✅ Type-safe data models with Pydantic"
+echo "✅ Checksum-based duplicate detection"
+echo "✅ Robust error handling and recovery"
+echo "✅ Microservice architecture with Docker"
+echo "✅ Comprehensive test coverage"
+echo "✅ Clean separation of concerns"
+echo "✅ Easy maintenance and scaling"
+echo ""
+
+print_header "Testing and Validation"
+
+echo ""
+echo "🧪 Run tests:"
+echo "  # Unit tests"
+echo "  pytest tests/unit/ -v --cov=src"
+echo ""
+echo "  # Integration tests"
+echo "  pytest tests/integration/ -v"
+echo ""
+echo "  # All tests with coverage"
+echo "  pytest --cov=src --cov-report=html"
+echo ""
+echo "🔍 Code quality:"
+echo "  black src/ tests/     # Format code"
+echo "  isort src/ tests/     # Sort imports"
+echo "  flake8 src/ tests/    # Lint code"
+echo "  mypy src/             # Type checking"
+echo ""
+
+print_status "Setup completed successfully!"
+
+echo ""
+echo "🎉 Your Crown Automotive Image Processing System is ready!"
+echo ""
+echo "Next steps:"
+echo "1. Update configuration files (.env, config/filemaker.dsn)"
+echo "2. Add your branding assets to assets/ directory"
+echo "3. Configure network drive mounts in docker-compose.yml"
+echo "4. Start the system: docker-compose up -d"
+echo "5. Import the n8n workflow"
+echo "6. Test with sample images"
 echo ""
 
 print_warning "Remember to test the system with a few sample images before production use!"

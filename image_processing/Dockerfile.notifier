@@ -1,4 +1,4 @@
-# Teams Notifier Container - Alpine base for lightweight notifications
+# ===== docker/Dockerfile.notifier =====
 FROM python:3.11-alpine
 
 # Install system dependencies
@@ -16,15 +16,16 @@ COPY requirements.notifier.txt /tmp/requirements.notifier.txt
 RUN pip install --no-cache-dir -r /tmp/requirements.notifier.txt
 
 # Create directories
-RUN mkdir -p /scripts /config /templates
+RUN mkdir -p /app/src /config /templates
 
-# Copy notifier files
-COPY scripts/teams_notifier.py /scripts/
-COPY scripts/notifier_server.py /scripts/
-COPY templates/ /templates/
+# Copy clean architecture source
+COPY src/ /app/src/
+
+# Set Python path
+ENV PYTHONPATH=/app
 
 # Set permissions
-RUN chmod +x /scripts/*.py
+RUN chmod +x /app/src/services/*.py
 
 # Expose port for notifier API
 EXPOSE 8004
@@ -34,4 +35,4 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=30s --retries=3 \
     CMD wget --quiet --tries=1 --spider http://localhost:8004/health || exit 1
 
 # Run notifier server
-CMD ["python3", "/scripts/notifier_server.py"]
+CMD ["python", "-m", "src.services.notifier_server"]

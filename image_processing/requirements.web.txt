@@ -1,7 +1,9 @@
+# ===== requirements.web.txt =====
 # Web Server Requirements - Alpine compatible
 # Web framework
-aiohttp>=3.8.0
-aiofiles>=23.1.0
+flask>=2.3.0
+fastapi>=0.104.0
+uvicorn>=0.24.0
 jinja2>=3.1.0
 
 # Image handling (basic)
@@ -9,6 +11,7 @@ Pillow>=10.0.0
 
 # Utilities
 structlog>=23.1.0
+pydantic>=2.4.0
 python-dateutil>=2.8.0
 
 # HTTP requests

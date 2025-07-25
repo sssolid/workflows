@@ -1,0 +1,345 @@
+{
+  "name": "Crown Automotive Processing - Clean Architecture",
+  "nodes": [
+    {
+      "parameters": {
+        "triggerTimes": {
+          "item": [
+            {
+              "mode": "everyMinute",
+              "minute": 2
+            }
+          ]
+        }
+      },
+      "id": "file-monitor-trigger",
+      "name": "File Monitor Trigger",
+      "type": "n8n-nodes-base.cron",
+      "typeVersion": 1,
+      "position": [240, 300]
+    },
+    {
+      "parameters": {
+        "url": "http://file_monitor:8002/processable"
+      },
+      "id": "get-processable-files",
+      "name": "Get Processable Files",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [460, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Process scan results and route files for processing\nconst response = $input.first().json;\n\nif (!response.new_files || response.new_files.length === 0) {\n  return [];\n}\n\nconst processableFiles = [];\n\nfor (const file of response.new_files) {\n  let processingType = 'background_removal';\n  \n  // Direct PSD processing\n  if (file.is_psd) {\n    processingType = 'format_generation';\n  }\n  \n  processableFiles.push({\n    json: {\n      file_id: file.file_id,\n      filename: file.filename,\n      file_type: file.file_type,\n      processing_type: processingType,\n      file_path: file.path,\n      is_psd: file.is_psd,\n      status: file.status,\n      checksum: file.checksum\n    }\n  });\n}\n\nreturn processableFiles;"
+      },
+      "id": "process-file-list",
+      "name": "Process File List",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [680, 300]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "condition_psd",
+              "leftValue": "={{ $json.is_psd }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        }
+      },
+      "id": "check-file-type",
+      "name": "Check File Type",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [900, 300]
+    },
+    {
+      "parameters": {
+        "url": "http://image_processor:8003/process",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"file_id\": \"{{ $json.file_id }}\",\n  \"processing_type\": \"format_generation\",\n  \"include_watermark\": false,\n  \"include_brand_icon\": true\n}",
+        "options": {
+          "timeout": 300000
+        }
+      },
+      "id": "process-psd-direct",
+      "name": "Process PSD Direct",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [1120, 200]
+    },
+    {
+      "parameters": {
+        "url": "http://ml_processor:8001/remove_background",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"file_id\": \"{{ $json.file_id }}\",\n  \"model\": \"isnet-general-use\",\n  \"enhance_input\": true,\n  \"post_process\": true,\n  \"alpha_threshold\": 40\n}",
+        "options": {
+          "timeout": 120000
+        }
+      },
+      "id": "remove-background",
+      "name": "Remove Background",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [1120, 400]
+    },
+    {
+      "parameters": {
+        "url": "http://teams_notifier:8004/notify",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"template_name\": \"file_discovered\",\n  \"context\": {\n    \"filename\": \"{{ $json.filename }}\",\n    \"file_id\": \"{{ $json.file_id }}\",\n    \"file_size_mb\": {{ $json.size_mb || 0 }},\n    \"file_type\": \"{{ $json.file_type }}\",\n    \"processing_type\": \"{{ $json.processing_type }}\"\n  }\n}",
+        "options": {
+          "timeout": 10000
+        }
+      },
+      "id": "notify-discovery",
+      "name": "Notify File Discovery",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [1340, 300]
+    },
+    {
+      "parameters": {
+        "triggerTimes": {
+          "item": [
+            {
+              "mode": "everyMinute",
+              "minute": 1
+            }
+          ]
+        }
+      },
+      "id": "decision-monitor-trigger",
+      "name": "Decision Monitor Trigger",
+      "type": "n8n-nodes-base.cron",
+      "typeVersion": 1,
+      "position": [240, 600]
+    },
+    {
+      "parameters": {
+        "url": "http://web_server:8080/api/decisions/pending"
+      },
+      "id": "check-decisions",
+      "name": "Check for Decisions",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [460, 600]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Process approval/rejection decisions\nconst response = $input.first().json;\n\nif (!response.decisions || response.decisions.length === 0) {\n  return [];\n}\n\nconst decisions = [];\n\nfor (const decision of response.decisions) {\n  decisions.push({\n    json: {\n      file_id: decision.file_id,\n      action: decision.action,\n      decision_id: decision.decision_id,\n      timestamp: decision.timestamp\n    }\n  });\n}\n\nreturn decisions;"
+      },
+      "id": "process-decisions",
+      "name": "Process Decisions",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [680, 600]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "condition_approve",
+              "leftValue": "={{ $json.action }}",
+              "rightValue": "approve",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        }
+      },
+      "id": "check-approval",
+      "name": "Check if Approved",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [900, 600]
+    },
+    {
+      "parameters": {
+        "url": "http://image_processor:8003/process",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"file_id\": \"{{ $json.file_id }}\",\n  \"processing_type\": \"format_generation\",\n  \"include_watermark\": false,\n  \"include_brand_icon\": true\n}",
+        "options": {
+          "timeout": 300000
+        }
+      },
+      "id": "generate-production-formats",
+      "name": "Generate Production Formats",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [1120, 550]
+    },
+    {
+      "parameters": {
+        "url": "http://web_server:8080/api/reject/{{ $json.file_id }}",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"reason\": \"Manual review required\"\n}",
+        "options": {
+          "timeout": 10000
+        }
+      },
+      "id": "handle-rejection",
+      "name": "Handle Rejection",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [1120, 650]
+    }
+  ],
+  "connections": {
+    "File Monitor Trigger": {
+      "main": [
+        [
+          {
+            "node": "Get Processable Files",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Processable Files": {
+      "main": [
+        [
+          {
+            "node": "Process File List",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Process File List": {
+      "main": [
+        [
+          {
+            "node": "Check File Type",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check File Type": {
+      "main": [
+        [
+          {
+            "node": "Process PSD Direct",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Remove Background",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Process PSD Direct": {
+      "main": [
+        [
+          {
+            "node": "Notify File Discovery",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Remove Background": {
+      "main": [
+        [
+          {
+            "node": "Notify File Discovery",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Decision Monitor Trigger": {
+      "main": [
+        [
+          {
+            "node": "Check for Decisions",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check for Decisions": {
+      "main": [
+        [
+          {
+            "node": "Process Decisions",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Process Decisions": {
+      "main": [
+        [
+          {
+            "node": "Check if Approved",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check if Approved": {
+      "main": [
+        [
+          {
+            "node": "Generate Production Formats",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Handle Rejection",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1"
+  }
+}

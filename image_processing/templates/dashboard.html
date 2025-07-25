@@ -1,3 +1,4 @@
+# ===== templates/dashboard.html =====
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -30,39 +31,6 @@
         .header p {
             font-size: 1.1em;
             opacity: 0.9;
-        }
-
-        .status-bar {
-            background: rgba(255,255,255,0.1);
-            padding: 15px;
-            margin-top: 20px;
-            border-radius: 8px;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            gap: 20px;
-            flex-wrap: wrap;
-        }
-
-        .status-item {
-            display: flex;
-            align-items: center;
-            gap: 8px;
-            font-size: 0.9em;
-        }
-
-        .status-dot {
-            width: 8px;
-            height: 8px;
-            border-radius: 50%;
-            background: #28a745;
-            animation: pulse 2s infinite;
-        }
-
-        @keyframes pulse {
-            0% { opacity: 1; }
-            50% { opacity: 0.5; }
-            100% { opacity: 1; }
         }
 
         .stats {
@@ -106,7 +74,6 @@
             font-weight: bold;
             margin: 15px 0;
             color: var(--card-color, #007acc);
-            text-shadow: 0 2px 4px rgba(0,0,0,0.1);
         }
 
         .stat-label {
@@ -115,12 +82,6 @@
             text-transform: uppercase;
             letter-spacing: 1px;
             font-weight: 500;
-        }
-
-        .stat-change {
-            font-size: 0.8em;
-            margin-top: 5px;
-            opacity: 0.7;
         }
 
         .processing { --card-color: #ffc107; }
@@ -142,9 +103,6 @@
             padding: 20px 25px;
             font-weight: 600;
             font-size: 1.1em;
-            display: flex;
-            align-items: center;
-            gap: 10px;
         }
 
         .file-list { padding: 0; }
@@ -158,25 +116,7 @@
         }
 
         .file-item:last-child { border-bottom: none; }
-
-        .file-item:hover {
-            background-color: #f8f9fa;
-        }
-
-        .file-thumb {
-            width: 60px;
-            height: 60px;
-            border-radius: 8px;
-            margin-right: 20px;
-            object-fit: cover;
-            border: 2px solid #e9ecef;
-            transition: all 0.2s ease;
-        }
-
-        .file-thumb:hover {
-            transform: scale(1.05);
-            border-color: #007acc;
-        }
+        .file-item:hover { background-color: #f8f9fa; }
 
         .file-info {
             flex: 1;
@@ -197,14 +137,6 @@
             align-items: center;
             gap: 15px;
             flex-wrap: wrap;
-        }
-
-        .file-meta {
-            display: flex;
-            gap: 15px;
-            font-size: 0.8em;
-            color: #888;
-            margin-top: 5px;
         }
 
         .file-actions {
@@ -232,23 +164,14 @@
             box-shadow: 0 4px 8px rgba(0,0,0,0.2);
         }
 
-        .btn-approve { background: #28a745; color: white; }
         .btn-review { background: #007acc; color: white; }
+        .btn-approve { background: #28a745; color: white; }
         .btn-download { background: #6c757d; color: white; }
-        .btn-retry { background: #ffc107; color: #212529; }
-        .btn-exif { background: #17a2b8; color: white; }
 
         .empty-state {
             text-align: center;
             padding: 60px 20px;
             color: #666;
-        }
-
-        .empty-state svg {
-            width: 80px;
-            height: 80px;
-            margin-bottom: 20px;
-            opacity: 0.3;
         }
 
         .refresh-btn {
@@ -270,38 +193,6 @@
 
         .refresh-btn:hover {
             transform: scale(1.1);
-            box-shadow: 0 8px 25px rgba(0,122,204,0.4);
-        }
-
-        .refresh-btn:active {
-            transform: scale(0.95);
-        }
-
-        .notification {
-            position: fixed;
-            top: 20px;
-            right: 20px;
-            background: #28a745;
-            color: white;
-            padding: 15px 20px;
-            border-radius: 8px;
-            box-shadow: 0 4px 12px rgba(0,0,0,0.2);
-            display: none;
-            z-index: 1001;
-        }
-
-        .loading {
-            display: inline-block;
-            width: 20px;
-            height: 20px;
-            border: 3px solid rgba(255,255,255,.3);
-            border-radius: 50%;
-            border-top-color: #fff;
-            animation: spin 1s ease-in-out infinite;
-        }
-
-        @keyframes spin {
-            to { transform: rotate(360deg); }
         }
 
         @media (max-width: 768px) {
@@ -321,14 +212,6 @@
                 width: 100%;
                 justify-content: flex-start;
             }
-
-            .header h1 {
-                font-size: 2em;
-            }
-
-            .section {
-                margin: 15px;
-            }
         }
 
         .tag {
@@ -339,90 +222,62 @@
             font-weight: 500;
         }
 
-        .tag-psd { background: #e3f2fd; color: #1976d2; }
-        .tag-approved { background: #e8f5e8; color: #2e7d32; }
         .tag-pending { background: #fff3e0; color: #f57c00; }
-        .tag-error { background: #ffebee; color: #c62828; }
+        .tag-completed { background: #e8f5e8; color: #2e7d32; }
     </style>
 </head>
 <body>
     <div class="header">
         <h1>🖼️ Crown Automotive Image Processing</h1>
-        <p>Automated image processing and production pipeline</p>
-
-        <div class="status-bar">
-            <div class="status-item">
-                <div class="status-dot"></div>
-                <span>System Online</span>
-            </div>
-            <div class="status-item">
-                <span>Last Updated: <span id="last-updated">{{ timestamp }}</span></span>
-            </div>
-            <div class="status-item">
-                <span>Server: {{ server_url }}</span>
-            </div>
-        </div>
+        <p>Clean Architecture - Modern Image Processing Pipeline</p>
     </div>
 
     <div class="stats">
         <div class="stat-card processing">
-            <div class="stat-number" id="processing-count">
-                <span class="loading" style="display: none;"></span>
-                <span class="count-text">0</span>
-            </div>
+            <div class="stat-number">{{ stats.processing }}</div>
             <div class="stat-label">Currently Processing</div>
-            <div class="stat-change">Files in pipeline</div>
         </div>
 
         <div class="stat-card pending">
-            <div class="stat-number" id="pending-count">{{ pending_count }}</div>
+            <div class="stat-number">{{ stats.pending }}</div>
             <div class="stat-label">Awaiting Review</div>
-            <div class="stat-change">Background removal complete</div>
         </div>
 
         <div class="stat-card completed">
-            <div class="stat-number" id="completed-count">{{ completed_count }}</div>
-            <div class="stat-label">Completed Today</div>
-            <div class="stat-change">Production ready</div>
+            <div class="stat-number">{{ stats.completed }}</div>
+            <div class="stat-label">Completed</div>
         </div>
 
         <div class="stat-card failed">
-            <div class="stat-number" id="failed-count">0</div>
+            <div class="stat-number">{{ stats.failed }}</div>
             <div class="stat-label">Need Attention</div>
-            <div class="stat-change">Manual review required</div>
         </div>
     </div>
 
     <div class="section">
         <div class="section-header">
-            <span>📋</span>
-            <span>Files Awaiting Review</span>
+            📋 Files Awaiting Review
         </div>
-        <div class="file-list" id="pending-files">
+        <div class="file-list">
             {% if pending_files %}
                 {% for file in pending_files %}
                 <div class="file-item">
-                    <img src="{{ server_url }}/bg_removed/{{ file.filename|urlencode }}" alt="Preview" class="file-thumb" onerror="this.src='data:image/svg+xml,<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 24 24\" fill=\"%23ccc\"><path d=\"M21 19V5c0-1.1-.9-2-2-2H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2zM8.5 13.5l2.5 3.01L14.5 12l4.5 6H5l3.5-4.5z\"/></svg>'">
                     <div class="file-info">
                         <div class="file-name">{{ file.filename }}</div>
                         <div class="file-status">
-                            <span class="tag tag-pending">Background Removed</span>
+                            <span class="tag tag-pending">{{ file.status.replace('_', ' ').title() }}</span>
                             <span>{{ file.size_mb }} MB</span>
-                            <span>{{ file.modified }}</span>
+                            <span>{{ file.created_at }}</span>
                         </div>
                     </div>
                     <div class="file-actions">
                         <a href="{{ file.review_url }}" class="btn btn-review">🔍 Review</a>
-                        <a href="{{ server_url }}/exif/{{ file.filename|urlencode }}" class="btn btn-exif">📊 EXIF</a>
-                        <button class="btn btn-approve" onclick="quickApprove('{{ file.filename|replace("'", "\\'") }}')">✅ Quick Approve</button>
+                        <button class="btn btn-approve" onclick="quickApprove('{{ file.file_id }}')">✅ Quick Approve</button>
                     </div>
                 </div>
                 {% endfor %}
             {% else %}
                 <div class="empty-state">
-                    <svg viewBox="0 0 24 24" fill="currentColor">
-                        <path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/>
-                    </svg>
                     <h3>No files pending review</h3>
                     <p>All processed images have been reviewed</p>
                 </div>
@@ -432,34 +287,28 @@
 
     <div class="section">
         <div class="section-header">
-            <span>✅</span>
-            <span>Recently Completed</span>
+            ✅ Recently Completed
         </div>
-        <div class="file-list" id="completed-files">
+        <div class="file-list">
             {% if completed_files %}
                 {% for file in completed_files %}
                 <div class="file-item">
-                    <img src="{{ server_url }}/production/1000x1000_72dpi_jpeg/{{ file.filename }}.jpg" alt="Preview" class="file-thumb" onerror="this.src='data:image/svg+xml,<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 24 24\" fill=\"%23ccc\"><path d=\"M21 19V5c0-1.1-.9-2-2-2H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2zM8.5 13.5l2.5 3.01L14.5 12l4.5 6H5l3.5-4.5z\"/></svg>'">
                     <div class="file-info">
                         <div class="file-name">{{ file.filename }}</div>
                         <div class="file-status">
-                            <span class="tag tag-approved">{{ file.variants_count }} formats generated</span>
-                            <span>{{ "%.1f"|format(file.processing_time) }}s processing</span>
-                            <span>{{ file.timestamp }}</span>
+                            <span class="tag tag-completed">Production Ready</span>
+                            <span>{{ file.size_mb }} MB</span>
+                            <span>{{ file.completed_at }}</span>
                         </div>
                     </div>
                     <div class="file-actions">
-                        <a href="{{ file.browse_url }}" class="btn btn-download">📁 Download All</a>
-                        <a href="{{ server_url }}/production/2500x2500_300dpi_tiff/{{ file.filename }}.tiff" class="btn btn-download">🖼️ High-Res</a>
+                        <a href="/browse/production/" class="btn btn-download">📁 Download All</a>
                     </div>
                 </div>
                 {% endfor %}
             {% else %}
                 <div class="empty-state">
-                    <svg viewBox="0 0 24 24" fill="currentColor">
-                        <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/>
-                    </svg>
-                    <h3>No completed files today</h3>
+                    <h3>No completed files</h3>
                     <p>Completed files will appear here</p>
                 </div>
             {% endif %}
@@ -467,162 +316,45 @@
     </div>
 
     <button class="refresh-btn" onclick="refreshData()" title="Refresh Data">
-        <span id="refresh-icon">🔄</span>
+        🔄
     </button>
 
-    <div class="notification" id="notification"></div>
-
     <script>
-        function quickApprove(fileName) {
-            if (confirm(`Approve ${fileName} for production processing?\n\nThis will generate all production formats.`)) {
-                showNotification('Processing approval...', 'info');
-
-                fetch('/api/decision', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ action: 'approve', fileId: fileName })
-                })
-                .then(response => response.json())
-                .then(data => {
-                    if (data.status === 'success') {
-                        showNotification(`✅ ${fileName} approved for processing!`, 'success');
-                        setTimeout(refreshData, 2000);
-                    } else {
-                        showNotification(`❌ Error: ${data.error || 'Unknown error'}`, 'error');
-                    }
-                })
-                .catch(error => {
-                    showNotification(`❌ Network error: ${error.message}`, 'error');
-                });
+        function quickApprove(fileId) {
+            if (confirm('Approve this file for production processing?')) {
+                fetch(`/api/approve/${fileId}`, { method: 'POST' })
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data.success) {
+                            alert('✅ File approved for processing!');
+                            refreshData();
+                        } else {
+                            alert('❌ Error: ' + (data.error || 'Unknown error'));
+                        }
+                    })
+                    .catch(error => {
+                        alert('❌ Network error: ' + error.message);
+                    });
             }
         }
 
         function refreshData() {
-            const refreshIcon = document.getElementById('refresh-icon');
-            const processingCount = document.querySelector('#processing-count .count-text');
-            const processingLoading = document.querySelector('#processing-count .loading');
-
-            // Show loading state
-            refreshIcon.style.transform = 'rotate(180deg)';
-            processingLoading.style.display = 'inline-block';
-
             fetch('/api/status')
                 .then(response => response.json())
                 .then(data => {
-                    document.getElementById('pending-count').textContent = data.pending || 0;
-                    document.getElementById('completed-count').textContent = data.completed || 0;
-                    document.getElementById('failed-count').textContent = data.failed || 0;
-                    processingCount.textContent = data.processing || 0;
-
-                    document.getElementById('last-updated').textContent = new Date().toLocaleTimeString();
-
-                    // Update file lists
-                    updateFileLists();
+                    // Update stats
+                    document.querySelector('.processing .stat-number').textContent = data.processing || 0;
+                    document.querySelector('.pending .stat-number').textContent = data.pending || 0;
+                    document.querySelector('.completed .stat-number').textContent = data.completed || 0;
+                    document.querySelector('.failed .stat-number').textContent = data.failed || 0;
                 })
                 .catch(error => {
                     console.error('Error refreshing data:', error);
-                    showNotification('❌ Error refreshing data', 'error');
-                })
-                .finally(() => {
-                    // Hide loading state
-                    refreshIcon.style.transform = '';
-                    processingLoading.style.display = 'none';
                 });
-        }
-
-        function updateFileLists() {
-            // Update pending files
-            fetch('/api/files/pending')
-                .then(response => response.json())
-                .then(files => {
-                    const container = document.getElementById('pending-files');
-                    if (files.length === 0) {
-                        container.innerHTML = `
-                            <div class="empty-state">
-                                <svg viewBox="0 0 24 24" fill="currentColor">
-                                    <path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/>
-                                </svg>
-                                <h3>No files pending review</h3>
-                                <p>All processed images have been reviewed</p>
-                            </div>
-                        `;
-                    } else {
-                        container.innerHTML = files.map(file => `
-                            <div class="file-item">
-                                <img src="${encodeURI(file.preview_url)}" alt="Preview" class="file-thumb" onerror="this.src='data:image/svg+xml,<svg xmlns=\\"http://www.w3.org/2000/svg\\" viewBox=\\"0 0 24 24\\" fill=\\"%23ccc\\"><path d=\\"M21 19V5c0-1.1-.9-2-2-2H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2zM8.5 13.5l2.5 3.01L14.5 12l4.5 6H5l3.5-4.5z\\"/></svg>'">
-                                <div class="file-info">
-                                    <div class="file-name">${file.filename}</div>
-                                    <div class="file-status">
-                                        <span class="tag tag-pending">Background Removed</span>
-                                        <span>${file.size_mb} MB</span>
-                                        <span>${new Date(file.modified).toLocaleTimeString()}</span>
-                                    </div>
-                                </div>
-                                <div class="file-actions">
-                                    <a href="${file.review_url}" class="btn btn-review">🔍 Review</a>
-                                    <a href="/exif/${encodeURIComponent(file.filename)}" class="btn btn-exif">📊 EXIF</a>
-                                    <button class="btn btn-approve" onclick="quickApprove('${file.filename.replace(/'/g, "\\'")}')">✅ Quick Approve</button>
-                                </div>
-                            </div>
-                        `).join('');
-                    }
-                })
-                .catch(error => console.error('Error updating pending files:', error));
-
-            // Update completed files
-            fetch('/api/files/completed')
-                .then(response => response.json())
-                .then(files => {
-                    const container = document.getElementById('completed-files');
-                    if (files.length === 0) {
-                        container.innerHTML = `
-                            <div class="empty-state">
-                                <svg viewBox="0 0 24 24" fill="currentColor">
-                                    <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/>
-                                </svg>
-                                <h3>No completed files today</h3>
-                                <p>Completed files will appear here</p>
-                            </div>
-                        `;
-                    } else {
-                        container.innerHTML = files.map(file => `
-                            <div class="file-item">
-                                <img src="/production/1000x1000_72dpi_jpeg/${encodeURIComponent(file.filename)}.jpg" alt="Preview" class="file-thumb" onerror="this.src='data:image/svg+xml,<svg xmlns=\\"http://www.w3.org/2000/svg\\" viewBox=\\"0 0 24 24\\" fill=\\"%23ccc\\"><path d=\\"M21 19V5c0-1.1-.9-2-2-2H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2zM8.5 13.5l2.5 3.01L14.5 12l4.5 6H5l3.5-4.5z\\"/></svg>'">
-                                <div class="file-info">
-                                    <div class="file-name">${file.filename}</div>
-                                    <div class="file-status">
-                                        <span class="tag tag-approved">${file.variants_count} formats generated</span>
-                                        <span>${file.processing_time.toFixed(1)}s processing</span>
-                                        <span>${new Date(file.timestamp).toLocaleTimeString()}</span>
-                                    </div>
-                                </div>
-                                <div class="file-actions">
-                                    <a href="/browse/production/" class="btn btn-download">📁 Download All</a>
-                                    <a href="/production/2500x2500_300dpi_tiff/${encodeURIComponent(file.filename)}.tiff" class="btn btn-download">🖼️ High-Res</a>
-                                </div>
-                            </div>
-                        `).join('');
-                    }
-                })
-                .catch(error => console.error('Error updating completed files:', error));
-        }
-
-        function showNotification(message, type = 'info') {
-            const notification = document.getElementById('notification');
-            notification.textContent = message;
-            notification.className = `notification ${type}`;
-            notification.style.display = 'block';
-
-            setTimeout(() => {
-                notification.style.display = 'none';
-            }, 5000);
         }
 
         // Auto-refresh every 30 seconds
         setInterval(refreshData, 30000);
-
-        // Initial load
-        setTimeout(refreshData, 1000);
 
         // Keyboard shortcuts
         document.addEventListener('keydown', function(e) {

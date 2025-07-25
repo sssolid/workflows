@@ -1,4 +1,4 @@
-# ML Processing Container - Ubuntu base for PyTorch/rembg compatibility
+# ===== docker/Dockerfile.ml =====
 FROM python:3.11-slim
 
 # Install system dependencies for ML libraries
@@ -11,9 +11,7 @@ RUN apt-get update && apt-get install -y \
     libxext6 \
     libxrender-dev \
     libgomp1 \
-    libglib2.0-0 \
-    libgtk-3-0 \
-    net-tools \
+    libgl1-mesa-glx \
     && rm -rf /var/lib/apt/lists/*
 
 # Create working directory
@@ -26,18 +24,16 @@ COPY requirements.ml.txt /tmp/requirements.ml.txt
 RUN pip install --no-cache-dir -r /tmp/requirements.ml.txt
 
 # Create directories
-RUN mkdir -p /scripts /config /data /assets
+RUN mkdir -p /app/src /config /data /assets
 
-# Copy ML processing scripts
-COPY scripts/background_removal.py /scripts/
-COPY scripts/ml_server.py /scripts/
-COPY scripts/utils/ /scripts/utils/
+# Copy clean architecture source
+COPY src/ /app/src/
+
+# Set Python path
+ENV PYTHONPATH=/app
 
 # Set permissions
-RUN chmod +x /scripts/*.py
-
-# Set working directory to scripts so imports work
-WORKDIR /scripts
+RUN chmod +x /app/src/services/*.py
 
 # Expose port for ML API
 EXPOSE 8001
@@ -46,5 +42,5 @@ EXPOSE 8001
 HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
     CMD curl -f http://localhost:8001/health || exit 1
 
-# Run ML processing server with explicit Python path and binding
-CMD ["python3", "ml_server.py"]
+# Run ML processing server
+CMD ["python", "-m", "src.services.ml_server"]

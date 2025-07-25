@@ -1,18 +1,35 @@
+# ===== docker-compose.yml (renamed from docker-compose-multi.yml) =====
+version: '3.8'
+
 services:
   # n8n Workflow Engine (Alpine - lightweight)
   n8n:
     build:
       context: .
-      dockerfile: Dockerfile.n8n
+      dockerfile: docker/Dockerfile.n8n
     container_name: crown_n8n
     restart: unless-stopped
     ports:
       - "5678:5678"
-    env_file: ".env"
+    environment:
+      - N8N_BASIC_AUTH_ACTIVE=true
+      - N8N_BASIC_AUTH_USER=${N8N_BASIC_AUTH_USER:-admin}
+      - N8N_BASIC_AUTH_PASSWORD=${N8N_BASIC_AUTH_PASSWORD:-admin}
+      - N8N_HOST=0.0.0.0
+      - N8N_PORT=5678
+      - N8N_PROTOCOL=http
+      - WEBHOOK_URL=http://${PUBLIC_HOST:-localhost}:5678
+      - NODE_ENV=production
+      # Service discovery for n8n workflows
+      - ML_PROCESSOR_URL=http://ml_processor:8001
+      - WEB_SERVER_URL=http://web_server:8080
+      - FILE_MONITOR_URL=http://file_monitor:8002
+      - IMAGE_PROCESSOR_URL=http://image_processor:8003
+      - TEAMS_NOTIFIER_URL=http://teams_notifier:8004
     volumes:
       - n8n_data:/home/node/.n8n
-      - ./scripts:/scripts
-      - ./config/n8n:/config
+      - ./src:/scripts  # Mount clean architecture source
+      - ./config:/config
       - ./data:/data
     networks:
       - crown_network
@@ -27,14 +44,18 @@ services:
   ml_processor:
     build:
       context: .
-      dockerfile: Dockerfile.ml
+      dockerfile: docker/Dockerfile.ml
     container_name: crown_ml_processor
     restart: unless-stopped
     ports:
       - "8001:8001"
-    env_file: ".env"
+    environment:
+      - CUDA_VISIBLE_DEVICES=""  # CPU-only processing
+      - OMP_NUM_THREADS=4
+      - MKL_NUM_THREADS=4
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
     volumes:
-      - ./scripts:/scripts
+      - ./src:/app/src
       - ./config:/config
       - ./data:/data
       - ./assets:/assets
@@ -51,14 +72,18 @@ services:
   web_server:
     build:
       context: .
-      dockerfile: Dockerfile.web
+      dockerfile: docker/Dockerfile.web
     container_name: crown_web_server
     restart: unless-stopped
     ports:
-      - "8080:8080"
-    env_file: ".env"
+      - "${WEB_PORT:-8080}:8080"
+    environment:
+      - WEB_HOST=0.0.0.0
+      - WEB_PORT=8080
+      - WEB_SECRET_KEY=${WEB_SECRET_KEY:-change-me-in-production}
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
     volumes:
-      - ./scripts:/scripts
+      - ./src:/app/src
       - ./config:/config
       - ./templates:/templates
       - ./assets:/assets
@@ -67,8 +92,9 @@ services:
       - crown_network
     depends_on:
       - ml_processor
+      - file_monitor
     healthcheck:
-      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:8080/health"]
+      test: ["CMD", "curl", "-f", "http://localhost:8080/api/status"]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -77,20 +103,24 @@ services:
   file_monitor:
     build:
       context: .
-      dockerfile: Dockerfile.monitor
+      dockerfile: docker/Dockerfile.monitor
     container_name: crown_file_monitor
     restart: unless-stopped
     ports:
       - "8002:8002"
-    env_file: ".env"
+    environment:
+      - PROCESSING_INPUT_DIR=/data/input
+      - PROCESSING_METADATA_DIR=/data/metadata
+      - PROCESSING_SCAN_INTERVAL_SECONDS=${SCAN_INTERVAL:-30}
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
     volumes:
-      - ./scripts:/scripts
+      - ./src:/app/src
       - ./config:/config
       - ./data:/data
     networks:
       - crown_network
     healthcheck:
-      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:8002/health"]
+      test: ["CMD", "curl", "-f", "http://localhost:8002/health"]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -99,14 +129,23 @@ services:
   image_processor:
     build:
       context: .
-      dockerfile: Dockerfile.processor
+      dockerfile: docker/Dockerfile.processor
     container_name: crown_image_processor
     restart: unless-stopped
     ports:
       - "8003:8003"
-    env_file: ".env"
+    environment:
+      - JAVA_HOME=/usr/lib/jvm/java-17-openjdk-amd64
+      - JVM_OPTS="-Xmx1g -Xms256m"
+      - FILEMAKER_DSN_PATH=/config/filemaker.dsn
+      - FILEMAKER_SERVER=${FILEMAKER_SERVER:-192.168.10.216}
+      - FILEMAKER_PORT=${FILEMAKER_PORT:-2399}
+      - FILEMAKER_DATABASE=${FILEMAKER_DATABASE:-CrownMasterDatabase}
+      - FILEMAKER_USERNAME=${FILEMAKER_USERNAME}
+      - FILEMAKER_PASSWORD=${FILEMAKER_PASSWORD}
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
     volumes:
-      - ./scripts:/scripts
+      - ./src:/app/src
       - ./config:/config
       - ./assets:/assets
       - ./data:/data
@@ -122,18 +161,26 @@ services:
   teams_notifier:
     build:
       context: .
-      dockerfile: Dockerfile.notifier
+      dockerfile: docker/Dockerfile.notifier
     container_name: crown_teams_notifier
     restart: unless-stopped
     ports:
       - "8004:8004"
-    env_file: ".env"
+    environment:
+      - TEAMS_WEBHOOK_URL=${TEAMS_WEBHOOK_URL}
+      - WEB_SERVER_URL=http://web_server:8080
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
     volumes:
-      - ./scripts:/scripts
+      - ./src:/app/src
       - ./config:/config
       - ./templates:/templates
     networks:
       - crown_network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8004/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
 
 networks:
   crown_network:

@@ -1,4 +1,4 @@
-# File Monitor Container - Alpine base for lightweight monitoring
+# ===== docker/Dockerfile.monitor =====
 FROM python:3.11-alpine
 
 # Install system dependencies
@@ -16,15 +16,16 @@ COPY requirements.monitor.txt /tmp/requirements.monitor.txt
 RUN pip install --no-cache-dir -r /tmp/requirements.monitor.txt
 
 # Create directories
-RUN mkdir -p /scripts /config /data
+RUN mkdir -p /app/src /config /data
 
-# Copy monitor files
-COPY scripts/file_monitor.py /scripts/
-COPY scripts/monitor_server.py /scripts/
-COPY scripts/utils/__init__.py /scripts/utils/
+# Copy clean architecture source
+COPY src/ /app/src/
+
+# Set Python path
+ENV PYTHONPATH=/app
 
 # Set permissions
-RUN chmod +x /scripts/*.py
+RUN chmod +x /app/src/services/*.py
 
 # Expose port for monitor API
 EXPOSE 8002
@@ -34,4 +35,4 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=30s --retries=3 \
     CMD wget --quiet --tries=1 --spider http://localhost:8002/health || exit 1
 
 # Run monitor server
-CMD ["python3", "/scripts/monitor_server.py"]
+CMD ["python", "-m", "src.services.monitor_server"]

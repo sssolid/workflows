@@ -1,4 +1,4 @@
-# Image Processor Container - Ubuntu base for FileMaker JDBC + complex processing
+# ===== docker/Dockerfile.processor =====
 FROM python:3.11-slim
 
 # Install system dependencies
@@ -7,14 +7,8 @@ RUN apt-get update && apt-get install -y \
     curl \
     build-essential \
     openjdk-17-jdk-headless \
-    openjdk-17-jre-headless \
     unixodbc \
     unixodbc-dev \
-    libglib2.0-0 \
-    libsm6 \
-    libxext6 \
-    libxrender-dev \
-    libgomp1 \
     exiftool \
     && rm -rf /var/lib/apt/lists/*
 
@@ -32,17 +26,16 @@ COPY requirements.processor.txt /tmp/requirements.processor.txt
 RUN pip install --no-cache-dir -r /tmp/requirements.processor.txt
 
 # Create directories
-RUN mkdir -p /scripts /config /assets /data
+RUN mkdir -p /app/src /config /assets /data
 
-# Copy processor files
-COPY scripts/image_processor.py /scripts/
-COPY scripts/processor_server.py /scripts/
-COPY scripts/utils/ /scripts/utils/
-COPY config/output_specs.yaml /config/
-COPY assets/ /assets/
+# Copy clean architecture source
+COPY src/ /app/src/
+
+# Set Python path
+ENV PYTHONPATH=/app
 
 # Set permissions
-RUN chmod +x /scripts/*.py
+RUN chmod +x /app/src/services/*.py
 
 # Expose port for processor API
 EXPOSE 8003
@@ -52,4 +45,4 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
     CMD curl -f http://localhost:8003/health || exit 1
 
 # Run processor server
-CMD ["python3", "/scripts/processor_server.py"]
+CMD ["python", "-m", "src.services.processor_server"]
