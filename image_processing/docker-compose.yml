@@ -1,5 +1,4 @@
-# ===== docker-compose.yml (renamed from docker-compose-multi.yml) =====
-version: '3.8'
+# ===== docker-compose.yml =====
 
 services:
   # n8n Workflow Engine (Alpine - lightweight)
