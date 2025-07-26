@@ -1,0 +1,67 @@
+# ===== Makefile.dev =====
+# Development environment commands
+
+.PHONY: dev-help dev-setup dev-start dev-stop dev-logs dev-test dev-clean
+
+dev-help:
+	@echo "Crown Automotive Image Processing - Development Commands"
+	@echo "======================================================"
+	@echo ""
+	@echo "Available commands:"
+	@echo "  dev-setup     - Setup development environment"
+	@echo "  dev-start     - Start development environment"
+	@echo "  dev-stop      - Stop development environment"
+	@echo "  dev-logs      - View development logs"
+	@echo "  dev-test      - Run development tests"
+	@echo "  dev-clean     - Clean development environment"
+	@echo "  dev-images    - Create sample test images"
+	@echo "  dev-db        - Show mock database contents"
+
+dev-setup:
+	@echo "🚀 Setting up development environment..."
+	chmod +x dev/setup_dev_environment.sh
+	./dev/setup_dev_environment.sh
+
+dev-start:
+	@echo "▶️ Starting development environment..."
+	cp .env.dev .env
+	docker-compose -f docker-compose.dev.yml up -d
+	@echo "✅ Development environment started"
+	@echo "Dashboard: http://localhost:8080"
+	@echo "n8n: http://localhost:5678 (admin/admin)"
+	@echo "Mock Teams: http://localhost:3000"
+
+dev-stop:
+	@echo "⏹️ Stopping development environment..."
+	docker-compose -f docker-compose.dev.yml down
+
+dev-logs:
+	docker-compose -f docker-compose.dev.yml logs -f
+
+dev-test:
+	@echo "🧪 Running development tests..."
+	docker-compose -f docker-compose.dev.yml exec web_server python -m pytest tests/ -v
+
+dev-clean:
+	@echo "🧹 Cleaning development environment..."
+	docker-compose -f docker-compose.dev.yml down -v
+	docker system prune -f
+	rm -rf dev/test_data/*
+	@echo "✅ Development environment cleaned"
+
+dev-images:
+	@echo "🖼️ Creating sample test images..."
+	python3 dev/create_sample_images.py
+
+dev-db:
+	@echo "📊 Mock database contents:"
+	docker-compose -f docker-compose.dev.yml exec mock_database sqlite3 /app/data/mock_crown.db ".tables"
+	docker-compose -f docker-compose.dev.yml exec mock_database sqlite3 /app/data/mock_crown.db "SELECT COUNT(*) as 'Total Parts' FROM Master;"
+	docker-compose -f docker-compose.dev.yml exec mock_database sqlite3 /app/data/mock_crown.db "SELECT COUNT(*) as 'Interchange Records' FROM as400_ininter;"
+
+dev-status:
+	@echo "📊 Development Environment Status:"
+	docker-compose -f docker-compose.dev.yml ps
+	@echo ""
+	@echo "🔍 Service Health:"
+	@curl -s http://localhost:8080/api/status | python -m json.tool || echo "Web server not responding"

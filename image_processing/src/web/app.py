@@ -1,7 +1,7 @@
 # ===== src/web/app.py =====
 """
 Web Application - Clean Architecture Implementation
-Flask application with clean separation of concerns
+Flask application with clean separation of concerns and manual override capabilities
 """
 
 import json
@@ -15,12 +15,12 @@ from werkzeug.utils import secure_filename
 
 from ..config.settings import settings
 from ..services.file_monitor_service import FileMonitorService
-from ..services.background_removal_service import BackgroundRemovalService
-from ..services.image_processing_service import ImageProcessingService
+from ..services.part_mapping_service import PartMappingService
 from ..services.filemaker_service import FileMakerService
 from ..services.notification_service import NotificationService
 from ..models.file_models import FileStatus
-from ..models.processing_models import BackgroundRemovalRequest, FormatGenerationRequest, ProcessingModel
+from ..models.part_mapping_models import ManualOverride
+from ..models.metadata_models import ExifMetadata, PartMetadata
 from ..utils.logging_config import setup_logging
 
 # Setup logging
@@ -36,6 +36,7 @@ def create_app() -> Flask:
 
     # Initialize services
     file_monitor = FileMonitorService()
+    part_mapper = PartMappingService()
     filemaker = FileMakerService()
     notifier = NotificationService()
 
@@ -47,19 +48,32 @@ def create_app() -> Flask:
             pending_files = file_monitor.get_files_by_status(FileStatus.AWAITING_REVIEW)
             completed_files = file_monitor.get_files_by_status(FileStatus.APPROVED)
 
+            # Add part mapping info to pending files
+            pending_data = []
+            for f in pending_files[:10]:
+                file_data = {
+                    'file_id': f.metadata.file_id,
+                    'filename': f.metadata.filename,
+                    'size_mb': f.metadata.size_mb,
+                    'status': f.metadata.status,
+                    'created_at': f.metadata.created_at.isoformat(),
+                    'preview_url': f'/api/preview/{f.metadata.file_id}',
+                    'review_url': f'/review/{f.metadata.file_id}',
+                    'edit_url': f'/edit/{f.metadata.file_id}'
+                }
+
+                # Add part mapping if available
+                if not f.part_number:
+                    mapping_result = part_mapper.map_filename_to_part_number(f.metadata.filename)
+                    if mapping_result.mapped_part_number:
+                        file_data['suggested_part'] = mapping_result.mapped_part_number
+                        file_data['mapping_confidence'] = mapping_result.confidence_score
+                        file_data['needs_review'] = mapping_result.requires_manual_review
+
+                pending_data.append(file_data)
+
             return render_template('dashboard.html', {
-                'pending_files': [
-                    {
-                        'file_id': f.metadata.file_id,
-                        'filename': f.metadata.filename,
-                        'size_mb': f.metadata.size_mb,
-                        'status': f.metadata.status,
-                        'created_at': f.metadata.created_at.isoformat(),
-                        'preview_url': f'/preview/{f.metadata.file_id}',
-                        'review_url': f'/review/{f.metadata.file_id}'
-                    }
-                    for f in pending_files[:10]
-                ],
+                'pending_files': pending_data,
                 'completed_files': [
                     {
                         'file_id': f.metadata.file_id,
@@ -117,19 +131,59 @@ def create_app() -> Flask:
         if not file_obj:
             return render_template('error.html', error='File not found'), 404
 
-        # Get part metadata if available
+        # Get part mapping if not already done
+        part_mapping = None
+        if not file_obj.part_number:
+            part_mapping = part_mapper.map_filename_to_part_number(file_obj.metadata.filename)
+
+        # Get part metadata if we have a part number
         part_metadata = None
-        if file_obj.part_number:
-            part_metadata = filemaker.get_part_metadata(file_obj.part_number)
+        part_number = file_obj.part_number or (part_mapping.mapped_part_number if part_mapping else None)
+        if part_number:
+            part_metadata = filemaker.get_part_metadata(part_number)
 
         return render_template('review.html', {
             'file': {
                 'file_id': file_obj.metadata.file_id,
                 'filename': file_obj.metadata.filename,
                 'status': file_obj.metadata.status,
-                'size_mb': f.metadata.size_mb,
+                'size_mb': file_obj.metadata.size_mb,
                 'dimensions': file_obj.dimensions.dict() if file_obj.dimensions else None,
+                'part_number': part_number,
+                'part_mapping': part_mapping.dict() if part_mapping else None,
                 'part_metadata': part_metadata.dict() if part_metadata else None,
+                'processing_history': file_obj.processing_history
+            },
+            'server_url': f"http://{settings.web.host}:{settings.web.port}"
+        })
+
+    @app.route('/edit/<file_id>')
+    def edit_metadata(file_id: str):
+        """Metadata editing interface."""
+        file_obj = file_monitor.get_file_by_id(file_id)
+        if not file_obj:
+            return render_template('error.html', error='File not found'), 404
+
+        # Get part mapping if not already done
+        part_mapping = None
+        if not file_obj.part_number:
+            part_mapping = part_mapper.map_filename_to_part_number(file_obj.metadata.filename)
+
+        # Get current metadata
+        part_number = file_obj.part_number or (part_mapping.mapped_part_number if part_mapping else None)
+        part_metadata = None
+        if part_number:
+            part_metadata = filemaker.get_part_metadata(part_number)
+
+        return render_template('edit_metadata.html', {
+            'file': {
+                'file_id': file_obj.metadata.file_id,
+                'filename': file_obj.metadata.filename,
+                'status': file_obj.metadata.status,
+                'size_mb': file_obj.metadata.size_mb,
+                'part_number': part_number,
+                'part_mapping': part_mapping.dict() if part_mapping else None,
+                'metadata_info': part_metadata.dict() if part_metadata else None,
                 'processing_history': file_obj.processing_history
             },
             'server_url': f"http://{settings.web.host}:{settings.web.port}"
@@ -146,6 +200,7 @@ def create_app() -> Flask:
                 'failed': len(file_monitor.get_files_by_status(FileStatus.FAILED)),
                 'total_tracked': len(file_monitor._tracked_files),
                 'database_connected': filemaker.test_connection(),
+                'part_mapper_ready': len(part_mapper.interchange_cache) > 0,
                 'timestamp': datetime.now().isoformat()
             }
 
@@ -155,12 +210,107 @@ def create_app() -> Flask:
             logger.error(f"Status API error: {e}")
             return jsonify({'error': str(e)}), 500
 
+    @app.route('/api/part-suggestions')
+    def api_part_suggestions():
+        """API endpoint for part number suggestions."""
+        try:
+            query = request.args.get('q', '').strip()
+            filename = request.args.get('filename', '')
+
+            if len(query) < 2:
+                return jsonify({'suggestions': []})
+
+            suggestions = part_mapper.get_manual_override_suggestions(filename, query)
+
+            # Get additional metadata for suggestions
+            suggestion_data = []
+            for part_number in suggestions[:10]:  # Limit to 10
+                metadata = filemaker.get_part_metadata(part_number)
+                suggestion_data.append({
+                    'part_number': part_number,
+                    'description': metadata.title if metadata else None,
+                    'brand': metadata.part_brand if metadata else None,
+                    'keywords': metadata.keywords if metadata else None
+                })
+
+            return jsonify({'suggestions': suggestion_data})
+
+        except Exception as e:
+            logger.error(f"Part suggestions API error: {e}")
+            return jsonify({'suggestions': [], 'error': str(e)})
+
+    @app.route('/api/update-metadata', methods=['POST'])
+    def api_update_metadata():
+        """API endpoint to update file metadata with manual overrides."""
+        try:
+            data = request.get_json()
+            file_id = data.get('file_id')
+
+            if not file_id:
+                return jsonify({'error': 'File ID required'}), 400
+
+            file_obj = file_monitor.get_file_by_id(file_id)
+            if not file_obj:
+                return jsonify({'error': 'File not found'}), 404
+
+            # Validate part number if provided
+            part_number = data.get('part_number', '').strip()
+            if part_number and not part_mapper.validate_part_number(part_number):
+                return jsonify({'error': f'Part number {part_number} not found in database'}), 400
+
+            # Create manual overrides for changed values
+            overrides = []
+            current_user = "web_user"  # TODO: Get from session/auth
+
+            # Check part number override
+            if part_number and part_number != file_obj.part_number:
+                overrides.append(ManualOverride(
+                    file_id=file_id,
+                    override_type="part_number",
+                    system_value=file_obj.part_number,
+                    user_value=part_number,
+                    override_reason=data.get('override_reason'),
+                    overridden_by=current_user
+                ))
+                file_obj.part_number = part_number
+
+            # Store overrides in file history
+            for override in overrides:
+                file_obj.add_processing_step("manual_override", override.dict())
+
+            # Update file metadata
+            file_obj.add_processing_step("metadata_updated", {
+                "updated_fields": list(data.keys()),
+                "user": current_user,
+                "reason": data.get('override_reason')
+            })
+
+            # If approve_after_save is true, approve the file
+            if data.get('approve_after_save'):
+                file_monitor.update_file_status(
+                    file_id,
+                    FileStatus.APPROVED,
+                    "Manually reviewed and approved"
+                )
+
+                # Trigger format generation
+                # This would normally be handled by the n8n workflow
+                logger.info(f"File {file_id} approved after manual review")
+
+            return jsonify({
+                'success': True,
+                'message': 'Metadata updated successfully',
+                'approved': data.get('approve_after_save', False)
+            })
+
+        except Exception as e:
+            logger.error(f"Update metadata API error: {e}")
+            return jsonify({'error': str(e)}), 500
+
     @app.route('/api/approve/<file_id>', methods=['POST'])
     def api_approve_file(file_id: str):
         """API endpoint to approve a file for production."""
         try:
-            # This will be handled by the image processor service
-            # Just update status here and let the workflow handle processing
             success = file_monitor.update_file_status(
                 file_id,
                 FileStatus.APPROVED,
@@ -203,6 +353,20 @@ def create_app() -> Flask:
         except Exception as e:
             logger.error(f"Rejection API error: {e}")
             return jsonify({'error': str(e)}), 500
+
+    @app.route('/api/preview/<file_id>')
+    def api_preview_image(file_id: str):
+        """Serve preview image for a file."""
+        try:
+            file_obj = file_monitor.get_file_by_id(file_id)
+            if not file_obj or not file_obj.current_location:
+                return "Image not found", 404
+
+            return send_file(file_obj.current_location)
+
+        except Exception as e:
+            logger.error(f"Preview API error: {e}")
+            return "Error serving image", 500
 
     @app.route('/api/decisions/pending')
     def api_pending_decisions():

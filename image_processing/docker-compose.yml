@@ -10,6 +10,8 @@ services:
     restart: unless-stopped
     ports:
       - "5678:5678"
+    env_file:
+      - .env
     environment:
       - N8N_BASIC_AUTH_ACTIVE=true
       - N8N_BASIC_AUTH_USER=${N8N_BASIC_AUTH_USER:-admin}
@@ -28,7 +30,7 @@ services:
     volumes:
       - n8n_data:/home/node/.n8n
       - ./src:/scripts  # Mount clean architecture source
-      - ./config:/config
+      - ./config:/config:ro
       - ./data:/data
     networks:
       - crown_network
@@ -48,16 +50,17 @@ services:
     restart: unless-stopped
     ports:
       - "8001:8001"
+    env_file:
+      - .env
     environment:
       - CUDA_VISIBLE_DEVICES=""  # CPU-only processing
       - OMP_NUM_THREADS=4
       - MKL_NUM_THREADS=4
-      - LOG_LEVEL=${LOG_LEVEL:-INFO}
     volumes:
-      - ./src:/app/src
-      - ./config:/config
+      - ./src:/app/src:ro
+      - ./config:/config:ro
       - ./data:/data
-      - ./assets:/assets
+      - ./assets:/assets:ro
       - ml_models_cache:/root/.cache  # Cache for rembg models
     networks:
       - crown_network
@@ -76,24 +79,25 @@ services:
     restart: unless-stopped
     ports:
       - "${WEB_PORT:-8080}:8080"
+    env_file:
+      - .env
     environment:
       - WEB_HOST=0.0.0.0
       - WEB_PORT=8080
-      - WEB_SECRET_KEY=${WEB_SECRET_KEY:-change-me-in-production}
-      - LOG_LEVEL=${LOG_LEVEL:-INFO}
     volumes:
-      - ./src:/app/src
-      - ./config:/config
-      - ./templates:/templates
-      - ./assets:/assets
+      - ./src:/app/src:ro
+      - ./config:/config:ro
+      - ./templates:/templates:ro
+      - ./assets:/assets:ro
       - ./data:/data
     networks:
       - crown_network
     depends_on:
       - ml_processor
       - file_monitor
+      - image_processor
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8080/api/status"]
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:8080/api/status"]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -107,19 +111,16 @@ services:
     restart: unless-stopped
     ports:
       - "8002:8002"
-    environment:
-      - PROCESSING_INPUT_DIR=/data/input
-      - PROCESSING_METADATA_DIR=/data/metadata
-      - PROCESSING_SCAN_INTERVAL_SECONDS=${SCAN_INTERVAL:-30}
-      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+    env_file:
+      - .env
     volumes:
-      - ./src:/app/src
-      - ./config:/config
+      - ./src:/app/src:ro
+      - ./config:/config:ro
       - ./data:/data
     networks:
       - crown_network
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8002/health"]
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:8002/health"]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -133,23 +134,20 @@ services:
     restart: unless-stopped
     ports:
       - "8003:8003"
+    env_file:
+      - .env
     environment:
       - JAVA_HOME=/usr/lib/jvm/java-17-openjdk-amd64
-      - JVM_OPTS="-Xmx1g -Xms256m"
-      - FILEMAKER_DSN_PATH=/config/filemaker.dsn
-      - FILEMAKER_SERVER=${FILEMAKER_SERVER:-192.168.10.216}
-      - FILEMAKER_PORT=${FILEMAKER_PORT:-2399}
-      - FILEMAKER_DATABASE=${FILEMAKER_DATABASE:-CrownMasterDatabase}
-      - FILEMAKER_USERNAME=${FILEMAKER_USERNAME}
-      - FILEMAKER_PASSWORD=${FILEMAKER_PASSWORD}
-      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+      - JVM_OPTS=-Xmx1g -Xms256m
     volumes:
-      - ./src:/app/src
-      - ./config:/config
-      - ./assets:/assets
+      - ./src:/app/src:ro
+      - ./config:/config:ro
+      - ./assets:/assets:ro
       - ./data:/data
     networks:
       - crown_network
+    depends_on:
+      - file_monitor
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8003/health"]
       interval: 30s
@@ -165,18 +163,16 @@ services:
     restart: unless-stopped
     ports:
       - "8004:8004"
-    environment:
-      - TEAMS_WEBHOOK_URL=${TEAMS_WEBHOOK_URL}
-      - WEB_SERVER_URL=http://web_server:8080
-      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+    env_file:
+      - .env
     volumes:
-      - ./src:/app/src
-      - ./config:/config
-      - ./templates:/templates
+      - ./src:/app/src:ro
+      - ./config:/config:ro
+      - ./templates:/templates:ro
     networks:
       - crown_network
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8004/health"]
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:8004/health"]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -190,4 +186,6 @@ networks:
 
 volumes:
   n8n_data:
-  ml_models_cache:  # Persistent cache for rembg models
+    driver: local
+  ml_models_cache:
+    driver: local

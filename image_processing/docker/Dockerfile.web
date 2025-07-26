@@ -10,28 +10,36 @@ RUN apk add --no-cache \
     python3-dev \
     jpeg-dev \
     zlib-dev \
-    freetype-dev
+    freetype-dev \
+    libffi-dev
 
 # Create working directory
 WORKDIR /app
 
-# Copy web server requirements
+# Copy web server requirements first for better caching
 COPY requirements.web.txt /tmp/requirements.web.txt
 
 # Install Python packages
 RUN pip install --no-cache-dir -r /tmp/requirements.web.txt
 
-# Create directories
-RUN mkdir -p /app/src /config /templates /assets /data
+# Create app user for security
+RUN addgroup -g 1001 -S appgroup && \
+    adduser -u 1001 -S appuser -G appgroup
+
+# Create directories with proper permissions
+RUN mkdir -p /app/src /config /templates /assets /data && \
+    chown -R appuser:appgroup /app /config /templates /assets /data
 
 # Copy clean architecture source
-COPY src/ /app/src/
+COPY --chown=appuser:appgroup src/ /app/src/
+COPY --chown=appuser:appgroup templates/ /templates/
 
 # Set Python path
 ENV PYTHONPATH=/app
+ENV PYTHONUNBUFFERED=1
 
-# Set permissions
-RUN chmod +x /app/src/web/*.py
+# Switch to non-root user
+USER appuser
 
 # Expose port for web server
 EXPOSE 8080

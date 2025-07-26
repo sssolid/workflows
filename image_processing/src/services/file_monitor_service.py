@@ -3,10 +3,10 @@ import json
 import logging
 from datetime import datetime
 from pathlib import Path
-from typing import Dict, List, Optional, Set
+from typing import Dict, List, Optional
 
 from ..config.settings import settings
-from ..models.file_models import FileMetadata, FileStatus, ProcessedFile
+from ..models.file_models import FileMetadata, FileStatus, FileType, ProcessedFile
 from ..utils.crypto_utils import calculate_file_checksums, generate_file_id
 from ..utils.error_handling import handle_processing_errors
 from ..utils.filesystem_utils import is_valid_image_file, detect_file_type, ensure_directory
@@ -23,6 +23,7 @@ class FileMonitorService:
     - Tracking file state across the processing pipeline
     - Preventing duplicate processing based on checksums
     - Recovering from system failures by re-checking incomplete files
+    - Integrating with part mapping for automatic part number detection
     """
 
     def __init__(self):
@@ -42,8 +43,19 @@ class FileMonitorService:
                     state_data = json.load(f)
 
                 for file_data in state_data.get('tracked_files', []):
-                    processed_file = ProcessedFile.parse_obj(file_data)
-                    self._tracked_files[processed_file.metadata.file_id] = processed_file
+                    try:
+                        # Handle both old and new file data formats
+                        if 'metadata' in file_data:
+                            processed_file = ProcessedFile.parse_obj(file_data)
+                        else:
+                            # Legacy format conversion
+                            metadata = FileMetadata(**file_data)
+                            processed_file = ProcessedFile(metadata=metadata)
+
+                        self._tracked_files[processed_file.metadata.file_id] = processed_file
+                    except Exception as e:
+                        logger.warning(f"Skipping invalid file data: {e}")
+                        continue
 
                 logger.info(f"Loaded {len(self._tracked_files)} tracked files from state")
             else:
@@ -89,13 +101,15 @@ class FileMonitorService:
             try:
                 processed_file = self._create_file_metadata(file_path)
 
-                # Check if we've already seen this file
-                if processed_file.metadata.file_id not in self._tracked_files:
+                # Check if we've already seen this file (by checksum)
+                existing_file = self.get_file_by_checksum(processed_file.metadata.checksum_sha256)
+
+                if not existing_file:
                     self._tracked_files[processed_file.metadata.file_id] = processed_file
                     discovered_files.append(processed_file)
                     logger.info(f"Discovered new file: {file_path.name} (ID: {processed_file.metadata.file_id})")
                 else:
-                    logger.debug(f"File already tracked: {file_path.name}")
+                    logger.debug(f"File already tracked by checksum: {file_path.name}")
 
             except Exception as e:
                 logger.error(f"Error processing file {file_path}: {e}")
@@ -127,10 +141,19 @@ class FileMonitorService:
             status=FileStatus.DISCOVERED
         )
 
-        return ProcessedFile(
+        processed_file = ProcessedFile(
             metadata=metadata,
             current_location=file_path
         )
+
+        # Add discovery step to history
+        processed_file.add_processing_step("file_discovered", {
+            "path": str(file_path),
+            "size_bytes": file_stats.st_size,
+            "file_type": file_type.value if file_type else "unknown"
+        })
+
+        return processed_file
 
     def get_files_by_status(self, status: FileStatus) -> List[ProcessedFile]:
         """Get all files with a specific status."""
@@ -212,10 +235,13 @@ class FileMonitorService:
         for file_obj in self._tracked_files.values():
             if file_obj.metadata.status == FileStatus.PROCESSING:
                 # Check if file has been processing for too long
-                last_update = max(
-                    step.started_at or datetime.min
-                    for step in file_obj.processing_history
-                ) if file_obj.processing_history else file_obj.metadata.created_at
+                last_update = file_obj.metadata.created_at
+                if file_obj.processing_history:
+                    last_step_time = max(
+                        datetime.fromisoformat(step.get('timestamp', '1970-01-01T00:00:00'))
+                        for step in file_obj.processing_history
+                    )
+                    last_update = max(last_update, last_step_time)
 
                 time_since_update = datetime.now() - last_update
                 if time_since_update.total_seconds() > settings.processing.processing_timeout_seconds:
@@ -230,3 +256,46 @@ class FileMonitorService:
             self._save_state()
 
         return recovered_files
+
+    def add_file_part_number(self, file_id: str, part_number: str, confidence: float = 1.0) -> bool:
+        """
+        Add part number to a tracked file.
+
+        Args:
+            file_id: File identifier
+            part_number: Part number to assign
+            confidence: Confidence in the mapping (0.0 to 1.0)
+
+        Returns:
+            True if successful
+        """
+        if file_id not in self._tracked_files:
+            return False
+
+        file_obj = self._tracked_files[file_id]
+        file_obj.part_number = part_number.upper().strip()
+
+        file_obj.add_processing_step("part_number_mapped", {
+            "part_number": part_number,
+            "confidence": confidence,
+            "source": "automatic_mapping"
+        })
+
+        self._save_state()
+        return True
+
+    def get_statistics(self) -> Dict[str, int]:
+        """Get file processing statistics."""
+        stats = {}
+        for status in FileStatus:
+            stats[status.value] = len(self.get_files_by_status(status))
+
+        stats['total'] = len(self._tracked_files)
+        return stats
+
+    def reset_state(self) -> None:
+        """Reset all tracking state (for debugging/maintenance)."""
+        self._tracked_files.clear()
+        if self.state_file.exists():
+            self.state_file.unlink()
+        logger.warning("File monitor state has been reset")

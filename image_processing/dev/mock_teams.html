@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Mock Teams Webhook</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 40px; }
+        .notification {
+            background: #e3f2fd;
+            border: 1px solid #2196f3;
+            padding: 15px;
+            margin: 10px 0;
+            border-radius: 4px;
+        }
+        .timestamp { color: #666; font-size: 0.9em; }
+    </style>
+</head>
+<body>
+    <h1>🔔 Mock Teams Notifications</h1>
+    <p>This page simulates Teams webhook notifications during development.</p>
+
+    <div class="notification">
+        <strong>Mock Notification Received</strong><br>
+        <span class="timestamp">Development notifications will appear here in a real environment.</span>
+    </div>
+
+    <h2>Recent Notifications</h2>
+    <div id="notifications">
+        <div class="notification">
+            <strong>File Discovered:</strong> sample_image.jpg<br>
+            <span class="timestamp">2024-01-01 12:00:00</span>
+        </div>
+        <div class="notification">
+            <strong>Processing Complete:</strong> background removal finished<br>
+            <span class="timestamp">2024-01-01 12:05:00</span>
+        </div>
+    </div>
+</body>
+</html>

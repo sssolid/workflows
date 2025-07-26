@@ -1,0 +1,10 @@
+# Development FileMaker DSN (points to mock database)
+[ODBC]
+DRIVER={Mock FileMaker}
+SERVER=mock_database
+PORT=5432
+DATABASE=mock_crown
+UID=dev_user
+PWD=dev_password
+TIMEOUT=30
+CHARSET=UTF-8

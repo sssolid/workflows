@@ -1,6 +1,7 @@
-# ===== Fix imports in services/background_removal_service.py =====
+# ===== src/services/background_removal_service.py =====
 import io
 import time
+import logging
 from pathlib import Path
 from typing import Optional
 from PIL import Image
@@ -72,6 +73,7 @@ class BackgroundRemovalService:
         try:
             # Load and preprocess image
             with Image.open(file_obj.current_location) as img:
+                original_size = img.size
                 if request.enhance_input:
                     img = self._enhance_image_for_processing(img)
 
@@ -114,7 +116,7 @@ class BackgroundRemovalService:
                 model_used=request.model.value,
                 quality_score=quality_score,
                 metadata={
-                    "original_size": {"width": img.width, "height": img.height},
+                    "original_size": {"width": original_size[0], "height": original_size[1]},
                     "result_size": {"width": result_img.width, "height": result_img.height},
                     "enhance_input": request.enhance_input,
                     "post_process": request.post_process,
@@ -145,9 +147,7 @@ class BackgroundRemovalService:
 
     def _image_to_bytes(self, img: Image.Image) -> bytes:
         """Convert PIL Image to bytes."""
-        from io import BytesIO
-
-        buf = BytesIO()
+        buf = io.BytesIO()
         img.save(buf, format="PNG")
         return buf.getvalue()
 
@@ -157,7 +157,11 @@ class BackgroundRemovalService:
             alpha_threshold: int = 40
     ) -> Image.Image:
         """Post-process background removal result."""
-        import cv2
+        try:
+            import cv2
+        except ImportError:
+            logger.warning("OpenCV not available, skipping advanced post-processing")
+            return result_img
 
         # Apply alpha threshold
         if alpha_threshold > 0:
@@ -188,6 +192,9 @@ class BackgroundRemovalService:
 
     def _calculate_quality_score(self, result_img: Image.Image) -> float:
         """Calculate a quality score for the background removal result."""
+        if result_img.mode != 'RGBA':
+            return 50.0  # Default score for non-transparent images
+
         alpha = result_img.split()[-1]
         alpha_array = np.array(alpha)
 
@@ -202,3 +209,12 @@ class BackgroundRemovalService:
         quality_score = min(100, clean_ratio * 100)
 
         return round(quality_score, 2)
+
+    def get_available_models(self) -> list:
+        """Get list of available background removal models."""
+        return [model.value for model in ProcessingModel]
+
+    def clear_model_cache(self) -> None:
+        """Clear model cache to free memory."""
+        self.models_cache.clear()
+        logger.info("Model cache cleared")

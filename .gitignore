@@ -205,7 +205,10 @@ cython_debug/
 marimo/_static/
 marimo/_lsp/
 __marimo__/
+
 /image_processing/config/filemaker.dsn
 /image_processing/config/fmjdbc.jar
 /image_processing/assets/
+/image_processing/data/
 /.idea/
+/image_processing/dev/sample_images/

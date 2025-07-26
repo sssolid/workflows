@@ -1,5 +1,4 @@
-# ===== README.md =====
-# Crown Automotive Image Processing System - Clean Architecture
+# Crown Automotive Image Processing System
 
 A modern, scalable image processing system built with clean architecture principles for Crown Automotive's marketing team.
 
@@ -8,10 +7,12 @@ A modern, scalable image processing system built with clean architecture princip
 ### Core Capabilities
 - **Automated File Monitoring**: Checksum-based duplicate detection and state tracking
 - **AI Background Removal**: Multiple model support (isnet, u2net, silueta)
+- **Part Number Mapping**: Intelligent mapping from image filenames to Crown part numbers
 - **Multi-Format Generation**: 24+ production formats for web, print, and social media
+- **Manual Override System**: Complete user control over system determinations
 - **Web Interface**: User-friendly review and approval workflow
 - **n8n Integration**: Declarative workflow orchestration
-- **FileMaker Integration**: Automatic part metadata retrieval
+- **FileMaker Integration**: Automatic part metadata retrieval with interchange mapping
 - **Robust State Management**: Recovery from system failures
 
 ### Clean Architecture Benefits
@@ -22,32 +23,95 @@ A modern, scalable image processing system built with clean architecture princip
 
 ## 🏗️ Architecture
 
+### Complete File Structure
 ```
-src/
-├── models/              # Pydantic data models (pure data, no logic)
-│   ├── file_models.py   # File and processing state models
-│   ├── processing_models.py  # Processing request/response models
-│   ├── metadata_models.py    # EXIF and part metadata models
-│   └── workflow_models.py    # Workflow orchestration models
-├── services/            # Business logic (single responsibility)
-│   ├── file_monitor_service.py      # File discovery and state tracking
-│   ├── background_removal_service.py # AI background removal
-│   ├── image_processing_service.py   # Multi-format generation
-│   ├── filemaker_service.py         # Database integration
-│   └── notification_service.py      # Teams notifications
-├── workflows/           # n8n orchestration glue (minimal logic)
-│   ├── file_monitoring.py           # File monitoring workflow
-│   └── processing_orchestrator.py   # Processing coordination
-├── utils/               # Reusable utilities
-│   ├── crypto_utils.py  # Checksum and file ID generation
-│   ├── filesystem_utils.py # File validation and utilities
-│   └── error_handling.py   # Consistent error handling
-├── config/              # Configuration management
-│   └── settings.py      # Pydantic settings with environment variables
-├── web/                 # Web interface
-│   ├── app.py          # Flask application
-│   └── routes/         # API endpoints
-└── main.py             # CLI and application entry point
+.gitignore                              # Git ignore rules
+image_processing/
+├── src/
+│   ├── __init__.py
+│   ├── main.py                         # CLI and application entry point
+│   ├── cli.py                          # Command line interface
+│   ├── models/                         # Pydantic data models
+│   │   ├── __init__.py
+│   │   ├── file_models.py             # File and processing state models
+│   │   ├── processing_models.py       # Processing request/response models
+│   │   ├── metadata_models.py         # EXIF and part metadata models
+│   │   ├── workflow_models.py         # Workflow orchestration models
+│   │   └── part_mapping_models.py     # Part number mapping models
+│   ├── services/                       # Business logic (single responsibility)
+│   │   ├── __init__.py
+│   │   ├── file_monitor_service.py    # File discovery and state tracking
+│   │   ├── background_removal_service.py # AI background removal
+│   │   ├── image_processing_service.py # Multi-format generation
+│   │   ├── filemaker_service.py       # Database integration with interchange
+│   │   ├── part_mapping_service.py    # Intelligent part number mapping
+│   │   ├── notification_service.py    # Teams notifications
+│   │   ├── ml_server.py              # ML processing API server
+│   │   ├── monitor_server.py         # File monitoring API server
+│   │   ├── processor_server.py       # Image processing API server
+│   │   └── notifier_server.py        # Notification API server
+│   ├── workflows/                      # n8n orchestration glue
+│   │   ├── __init__.py
+│   │   ├── file_monitoring.py         # File monitoring workflow
+│   │   └── processing_orchestrator.py # Processing coordination
+│   ├── web/                           # Web interface with manual overrides
+│   │   ├── __init__.py
+│   │   └── app.py                     # Flask application with all routes
+│   ├── utils/                         # Reusable utilities
+│   │   ├── __init__.py
+│   │   ├── crypto_utils.py           # Checksum and file ID generation
+│   │   ├── filesystem_utils.py       # File validation and utilities
+│   │   ├── error_handling.py         # Consistent error handling
+│   │   └── logging_config.py         # Logging configuration
+│   └── config/                        # Configuration management
+│       ├── __init__.py
+│       └── settings.py               # Pydantic settings with environment
+├── tests/                             # Comprehensive test suite
+│   ├── __init__.py
+│   ├── unit/                         # Unit tests with mocks
+│   │   ├── __init__.py
+│   │   ├── test_file_models.py
+│   │   ├── test_file_monitor_service.py
+│   │   ├── test_background_removal_service.py
+│   │   └── test_part_mapping_service.py
+│   └── integration/                   # Integration tests
+│       ├── __init__.py
+│       └── test_workflow_integration.py
+├── templates/                         # Web interface templates
+│   ├── dashboard.html                # Main dashboard
+│   ├── upload.html                   # File upload interface
+│   ├── review.html                   # File review interface
+│   ├── edit_metadata.html            # Manual override interface
+│   └── error.html                    # Error page
+├── config/                           # Configuration files
+│   ├── output_specs.yaml            # Image output format specifications
+│   └── filemaker.dsn.sample         # Database connection template
+├── docker/                           # Docker configurations
+│   ├── Dockerfile.web               # Web server container
+│   ├── Dockerfile.ml                # ML processing container
+│   ├── Dockerfile.monitor           # File monitoring container
+│   ├── Dockerfile.processor         # Image processor container
+│   ├── Dockerfile.notifier          # Notification service container
+│   └── Dockerfile.n8n               # n8n workflow engine container
+├── workflows/                        # n8n workflow definitions
+│   └── crown_processing_clean.json  # Main processing workflow
+├── assets/                           # Static assets and branding
+│   └── .gitkeep
+├── data/                             # Runtime data directories
+│   └── .gitkeep
+├── docker-compose.yml               # Multi-container orchestration
+├── .env.sample                      # Environment configuration template
+├── Makefile                         # Development and deployment commands
+├── setup.sh                         # System setup script
+├── requirements.txt                 # Main Python dependencies
+├── requirements.web.txt             # Web server specific dependencies
+├── requirements.ml.txt              # ML processing dependencies
+├── requirements.monitor.txt         # File monitor dependencies
+├── requirements.processor.txt       # Image processor dependencies
+├── requirements.notifier.txt        # Notification service dependencies
+├── README.md                        # This file
+├── STRUCTURE.md                     # Architecture documentation
+└── pyproject.toml                   # Python project configuration
 ```
 
 ## 🚀 Quick Start
@@ -56,6 +120,7 @@ src/
 - Docker and Docker Compose
 - Network storage access for input/output directories
 - FileMaker database with ODBC/JDBC access
+- At least 8GB RAM (for ML processing)
 
 ### Installation
 
@@ -63,13 +128,15 @@ src/
    ```bash
    git clone <repository>
    cd crown-image-processing
-   pip install -r requirements.txt
+   chmod +x setup.sh
+   ./setup.sh
    ```
 
 2. **Configure Environment**
    ```bash
    cp .env.sample .env
    # Edit .env with your configuration
+   vim .env
    ```
 
 3. **Setup Database Connection**
@@ -79,35 +146,103 @@ src/
    # Place fmjdbc.jar in config/ directory for JDBC fallback
    ```
 
-4. **Start Services**
+4. **Configure Network Drives**
    ```bash
-   docker-compose -f docker-compose.clean.yml up -d
+   # Update docker-compose.yml volumes section:
+   # - /path/to/network/image-dropzone:/data/input
+   # - /path/to/network/processed-images:/data/production
+   # - /path/to/network/manual-review:/data/rejected
    ```
 
-5. **Import n8n Workflow**
+5. **Start Services**
+   ```bash
+   docker-compose up -d
+   ```
+
+6. **Import n8n Workflow**
    - Access n8n at http://localhost:5678
-   - Import `workflows/crown_processing.json`
+   - Import `workflows/crown_processing_clean.json`
    - Activate the workflow
 
-### Network Drive Configuration
+## 🔄 Processing Workflow
 
-Update docker-compose.clean.yml volumes:
-```yaml
-volumes:
-  - /path/to/network/image-dropzone:/data/input
-  - /path/to/network/processed-images:/data/production
-  - /path/to/network/manual-review:/data/rejected
-```
+### Intelligent Part Number Mapping
+
+The system automatically maps image filenames to correct Crown part numbers:
+
+1. **Filename Analysis**: Extracts potential part numbers from patterns like:
+   - `J1234567_2.jpg` → `J1234567`
+   - `12345 (2).jpg` → `12345`
+   - `crown_12345_detail.jpg` → `12345`
+
+2. **Database Lookup**: Checks against:
+   - Current active parts in Master table
+   - Interchange mappings using AS400_ININTER table
+   - Fuzzy matching for variations
+
+3. **Manual Override**: Web interface allows complete override of:
+   - Part number mapping
+   - Image metadata (title, description, keywords)
+   - EXIF data
+   - Processing decisions
+
+### For PSD Files
+1. **File Discovery** → Part number mapping → Direct processing
+2. **Format Generation** → 24 formats created → Production ready
+3. **Teams Notification** → Download links provided
+
+### For Other Images
+1. **File Discovery** → Part number mapping → Background removal queue
+2. **AI Processing** → Quality assessment → Manual review interface
+3. **Metadata Editing** → User can override all system determinations
+4. **Approval** → Format generation → Teams notification
 
 ## 💻 Development
 
+### Local Testing Environment
+
+For testing without external dependencies (no FileMaker, no network drives, no production environment):
+
+```bash
+# Setup development environment with mock services
+chmod +x dev/setup_dev_environment.sh
+./dev/setup_dev_environment.sh
+
+# Start development environment
+make -f Makefile.dev dev-start
+
+# Access development system
+# Dashboard: http://localhost:8080
+# n8n: http://localhost:5678 (admin/admin)
+# Mock Teams: http://localhost:3000
+
+# Run tests
+python3 dev/test_workflow.py
+
+# Stop when done
+make -f Makefile.dev dev-stop
+```
+
+The development environment includes:
+- **Mock FileMaker database** with sample Crown parts and interchange data
+- **Sample test images** covering various part number patterns
+- **Mock Teams notifications** for testing webhook integration
+- **Complete workflow testing** without external dependencies
+
+See [Development Testing Guide](dev/README_DEVELOPMENT.md) for detailed instructions.
+
+### Production Development
+
 ### Running Tests
 ```bash
+# Install development dependencies
+pip install -e .[dev]
+
 # Unit tests
 pytest tests/unit/ -v --cov=src
 
-# Integration tests
-pytest tests/integration/ -v
+# Integration tests (requires database)
+pytest tests/integration/ -v -m "requires_db"
 
 # All tests with coverage
 pytest --cov=src --cov-report=html
@@ -122,96 +257,83 @@ isort src/ tests/
 # Lint
 flake8 src/ tests/
 mypy src/
+
+# Type checking
+mypy src/
 ```
 
 ### CLI Usage
 
 ```bash
-# Monitor files (standalone)
-python -m src.main monitor --once
-
-# Run web server
-python -m src.main web
-
 # System status
-python -m src.main status
+python -m src.cli status
 
-# n8n workflow mode
-python -m src.main monitor --workflow scan
-python -m src.main monitor --workflow processable
+# Scan for files
+python -m src.cli scan --processable
+
+# Process specific file
+python -m src.cli process FILE_ID --background-removal
+
+# Test system components
+python -m src.cli test
+
+# Reset system state
+python -m src.cli reset --confirm
 ```
 
-## 🔄 Workflow Process
+## 🔧 Key Features
 
-### For PSD Files
-1. **File Discovery** → Checksum calculation → State tracking
-2. **Direct Processing** → 24 formats generated → Production ready
-3. **Teams Notification** → Download links provided
+### Part Number Mapping System
 
-### For Other Images
-1. **File Discovery** → Checksum validation → Queue for processing
-2. **Background Removal** → AI processing → Quality assessment
-3. **Review Interface** → Manual approval/rejection → EXIF editing
-4. **Production Processing** → 24 formats generated → Teams notification
+**Intelligent filename parsing** with patterns for:
+- Standard Crown part numbers (J1234567, A12345)  
+- Numbered variations (12345_2.jpg, 12345 (2).jpg)
+- Descriptive suffixes (12345_detail.jpg, 12345_main.jpg)
 
-## 🧪 Testing Strategy
+**Database integration** with:
+- Interchange table queries using AS400_ININTER
+- Current part validation against Master table
+- Fuzzy matching for similar parts
 
-### Unit Tests
-- **Models**: Validation logic and computed properties
-- **Services**: Business logic with mocked dependencies
-- **Utils**: Pure functions and error handling
+**Manual override capabilities**:
+- Web interface for all corrections
+- Part number suggestions with autocomplete
+- Reason tracking for audit trail
 
-### Integration Tests
-- **Workflow**: End-to-end n8n integration
-- **API**: Web interface endpoints
-- **Database**: FileMaker connection and queries
+### Manual Override System
 
-### Test Data Management
-```python
-# Example test with proper mocking
-def test_background_removal(mock_file, bg_service):
-    """Test background removal with proper isolation."""
-    request = BackgroundRemovalRequest(
-        file_id="test_123",
-        model=ProcessingModel.ISNET_GENERAL
-    )
-    
-    with patch('rembg.remove') as mock_remove:
-        mock_remove.return_value = b"processed_image_data"
-        result = bg_service.remove_background(mock_file, request)
-        
-    assert result.success is True
-    assert result.quality_score > 0
-```
+Users can override **any** system determination:
+- **Part Number**: With autocomplete suggestions from database
+- **Image Title**: Auto-populated from part description
+- **Description**: From part metadata or manual entry
+- **Keywords**: Combined from database fields or custom
+- **EXIF Data**: Complete control over embedded metadata
 
-## 🔧 Key Improvements
+### Error Recovery
 
-### From Original Implementation
+The system automatically handles:
+- **File Processing Failures**: Retry with different models
+- **System Crashes**: Resume incomplete processing
+- **Network Issues**: Queue operations for retry
+- **Database Connectivity**: Graceful degradation with cached data
+- **Duplicate Detection**: Checksum-based prevention
 
-1. **State Management**: 
-   - Checksum-based file tracking prevents duplicates
-   - Recovery from system failures
-   - Persistent state across restarts
+## 🌐 Web Interface
 
-2. **Type Safety**:
-   - Pydantic models for all data structures
-   - Compile-time error detection
-   - API contract validation
+### Dashboard
+- **Real-time Status**: Processing statistics and file counts
+- **Quick Actions**: Approve, reject, or edit files
+- **Part Mapping Status**: Confidence indicators for automatic mappings
 
-3. **Error Handling**:
-   - Consistent error propagation
-   - Structured logging
-   - Graceful degradation
+### Review Interface
+- **Side-by-side Comparison**: Original vs processed images
+- **Processing History**: Complete audit trail
+- **Part Information**: Automatic lookup with manual override
 
-4. **Testability**:
-   - Dependency injection
-   - Mocked external services
-   - Isolated unit tests
-
-5. **Maintainability**:
-   - Single responsibility classes
-   - Clear service boundaries
-   - Configuration management
+### Metadata Editor
+- **Smart Suggestions**: Database-driven autocomplete
+- **Override Tracking**: Reason logging for manual changes
+- **Batch Operations**: Multiple file processing
 
 ## 📊 Configuration
 
@@ -222,9 +344,11 @@ PROCESSING_INPUT_DIR=/data/input
 PROCESSING_MIN_FILE_SIZE_BYTES=1024
 PROCESSING_SCAN_INTERVAL_SECONDS=30
 
-# Database
+# Database  
 FILEMAKER_DSN_PATH=/config/filemaker.dsn
 FILEMAKER_SERVER=192.168.10.216
+FILEMAKER_USERNAME=your_username
+FILEMAKER_PASSWORD=your_password
 
 # Web Interface
 WEB_HOST=0.0.0.0
@@ -232,7 +356,7 @@ WEB_PORT=8080
 WEB_SECRET_KEY=your-secret-key
 
 # Notifications
-NOTIFICATION_TEAMS_WEBHOOK_URL=https://your-webhook-url
+TEAMS_WEBHOOK_URL=https://your-webhook-url
 ```
 
 ### Processing Models
@@ -242,20 +366,13 @@ Available background removal models:
 - `u2net_human_seg` (portrait-optimized)
 - `silueta` (high quality, slower)
 
-## 🚨 Error Recovery
-
-The system automatically handles:
-- **File Processing Failures**: Retry with different models
-- **System Crashes**: Resume incomplete processing
-- **Network Issues**: Queue operations for retry
-- **Database Connectivity**: Graceful degradation with cached data
-
 ## 🔒 Security
 
 - **Input Validation**: All inputs validated with Pydantic
 - **File Upload Security**: Filename sanitization and type checking
 - **Database Access**: Read-only connections with least privilege
 - **Error Handling**: No sensitive information in error messages
+- **Environment Variables**: All secrets in .env files (not in VCS)
 
 ## 📈 Performance
 
@@ -263,14 +380,58 @@ The system automatically handles:
 - **Model Caching**: ML models loaded once and reused
 - **Database Connection Pooling**: Efficient database access
 - **Checksum-based Deduplication**: Prevents redundant processing
+- **Interchange Caching**: Part mappings cached for performance
+
+## 🚨 Troubleshooting
+
+### Common Issues
+
+1. **Database Connection Fails**
+   ```bash
+   # Test connection
+   python -m src.cli test
+   # Check DSN file and JDBC driver
+   ls -la config/filemaker.dsn config/fmjdbc.jar
+   ```
+
+2. **Part Mapping Not Working**
+   ```bash
+   # Check interchange cache
+   docker-compose logs image_processor | grep interchange
+   # Refresh mappings
+   docker-compose restart image_processor
+   ```
+
+3. **Background Removal Slow**
+   ```bash
+   # Check available models
+   curl http://localhost:8001/models
+   # Monitor ML processing
+   docker-compose logs -f ml_processor
+   ```
 
 ## 🤝 Contributing
 
 1. **Follow Clean Code Principles**: Single responsibility, no side effects
-2. **Add Tests**: 90%+ coverage requirement
+2. **Add Tests**: 90%+ coverage requirement  
 3. **Type Hints**: All public methods must have type annotations
 4. **Documentation**: Docstrings for all public classes and methods
 5. **Conventional Commits**: Use conventional commit format
+
+### Development Setup
+```bash
+# Install with development dependencies
+pip install -e .[dev]
+
+# Setup pre-commit hooks
+pre-commit install
+
+# Run full test suite
+make test
+
+# Check code quality
+make lint
+```
 
 ---
 

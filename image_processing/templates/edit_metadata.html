@@ -1,0 +1,546 @@
+<!-- ===== templates/edit_metadata.html ===== -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Edit Metadata: {{ file.filename }} - Crown Automotive</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        .header {
+            background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%);
+            color: white;
+            padding: 20px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+        }
+
+        .content-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+            margin-bottom: 20px;
+        }
+
+        .image-preview {
+            background: white;
+            border-radius: 8px;
+            padding: 20px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+
+        .image-preview img {
+            max-width: 100%;
+            height: auto;
+            border-radius: 4px;
+        }
+
+        .metadata-form {
+            background: white;
+            border-radius: 8px;
+            padding: 20px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+
+        .form-section {
+            margin-bottom: 25px;
+            padding-bottom: 20px;
+            border-bottom: 1px solid #e0e0e0;
+        }
+
+        .form-section:last-child {
+            border-bottom: none;
+        }
+
+        .section-title {
+            font-size: 1.1em;
+            font-weight: 600;
+            color: #2c3e50;
+            margin-bottom: 15px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .form-group {
+            margin-bottom: 15px;
+        }
+
+        .form-label {
+            display: block;
+            font-weight: 500;
+            color: #555;
+            margin-bottom: 5px;
+        }
+
+        .form-input {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-size: 14px;
+            transition: border-color 0.2s;
+        }
+
+        .form-input:focus {
+            outline: none;
+            border-color: #007acc;
+            box-shadow: 0 0 0 2px rgba(0, 122, 204, 0.1);
+        }
+
+        .form-textarea {
+            height: 80px;
+            resize: vertical;
+        }
+
+        .system-value {
+            background: #f8f9fa;
+            border: 1px solid #e9ecef;
+            padding: 8px;
+            border-radius: 4px;
+            margin-bottom: 8px;
+            font-size: 13px;
+            color: #6c757d;
+        }
+
+        .override-indicator {
+            display: inline-block;
+            background: #ffc107;
+            color: #856404;
+            padding: 2px 6px;
+            border-radius: 3px;
+            font-size: 11px;
+            font-weight: 500;
+            margin-left: 8px;
+        }
+
+        .suggestion-list {
+            background: white;
+            border: 1px solid #ddd;
+            border-top: none;
+            max-height: 150px;
+            overflow-y: auto;
+            position: absolute;
+            width: 100%;
+            z-index: 1000;
+            display: none;
+        }
+
+        .suggestion-item {
+            padding: 8px 12px;
+            cursor: pointer;
+            border-bottom: 1px solid #eee;
+            font-size: 13px;
+        }
+
+        .suggestion-item:hover {
+            background: #f8f9fa;
+        }
+
+        .suggestion-item:last-child {
+            border-bottom: none;
+        }
+
+        .part-number-input {
+            position: relative;
+        }
+
+        .confidence-indicator {
+            display: inline-block;
+            padding: 2px 8px;
+            border-radius: 12px;
+            font-size: 11px;
+            font-weight: 500;
+            margin-left: 8px;
+        }
+
+        .confidence-high {
+            background: #d4edda;
+            color: #155724;
+        }
+
+        .confidence-medium {
+            background: #fff3cd;
+            color: #856404;
+        }
+
+        .confidence-low {
+            background: #f8d7da;
+            color: #721c24;
+        }
+
+        .btn {
+            padding: 10px 20px;
+            border: none;
+            border-radius: 4px;
+            font-weight: 500;
+            cursor: pointer;
+            text-decoration: none;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            transition: all 0.2s;
+        }
+
+        .btn-primary {
+            background: #007acc;
+            color: white;
+        }
+
+        .btn-secondary {
+            background: #6c757d;
+            color: white;
+        }
+
+        .btn-success {
+            background: #28a745;
+            color: white;
+        }
+
+        .btn:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+        }
+
+        .action-bar {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            display: flex;
+            gap: 15px;
+            justify-content: center;
+        }
+
+        .mapping-info {
+            background: #e3f2fd;
+            border: 1px solid #2196f3;
+            border-radius: 4px;
+            padding: 10px;
+            margin-bottom: 15px;
+            font-size: 13px;
+        }
+
+        .mapping-method {
+            font-weight: 500;
+            color: #1976d2;
+        }
+
+        @media (max-width: 768px) {
+            .content-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+<div class="container">
+    <div class="header">
+        <h1>✏️ Edit Metadata</h1>
+        <p>{{ file.filename }} ({{ file.size_mb }} MB)</p>
+        {% if file.part_mapping %}
+        <div class="mapping-info">
+            <span class="mapping-method">{{ file.part_mapping.mapping_method }}</span>
+            <span class="confidence-indicator confidence-{{ 'high' if file.part_mapping.confidence_score > 0.8 else 'medium' if file.part_mapping.confidence_score > 0.5 else 'low' }}">
+                    {{ (file.part_mapping.confidence_score * 100)|round|int }}% confidence
+                </span>
+        </div>
+        {% endif %}
+    </div>
+
+    <div class="content-grid">
+        <div class="image-preview">
+            <h3>Current Image</h3>
+            <img src="{{ server_url }}/api/preview/{{ file.file_id }}" alt="{{ file.filename }}">
+
+            {% if file.processing_history %}
+            <h4 style="margin-top: 20px;">Processing History</h4>
+            <div style="max-height: 200px; overflow-y: auto; font-size: 12px;">
+                {% for step in file.processing_history %}
+                <div style="padding: 5px; border-bottom: 1px solid #eee;">
+                    <strong>{{ step.step }}</strong> - {{ step.timestamp }}
+                    {% if step.details %}
+                    <div style="color: #666;">{{ step.details }}</div>
+                    {% endif %}
+                </div>
+                {% endfor %}
+            </div>
+            {% endif %}
+        </div>
+
+        <div class="metadata-form">
+            <form id="metadataForm">
+                <input type="hidden" name="file_id" value="{{ file.file_id }}">
+
+                <!-- Part Number Section -->
+                <div class="form-section">
+                    <div class="section-title">🔧 Part Information</div>
+
+                    <div class="form-group">
+                        <label class="form-label">Part Number</label>
+                        {% if file.part_mapping and file.part_mapping.mapped_part_number %}
+                        <div class="system-value">
+                            System detected: {{ file.part_mapping.mapped_part_number }}
+                            {% if file.part_mapping.interchange_mapping %}
+                            (mapped from {{ file.part_mapping.interchange_mapping.old_part_number }})
+                            {% endif %}
+                        </div>
+                        {% endif %}
+                        <div class="part-number-input">
+                            <input
+                                    type="text"
+                                    name="part_number"
+                                    class="form-input"
+                                    value="{{ file.part_number or (file.part_mapping.mapped_part_number if file.part_mapping else '') }}"
+                                    autocomplete="off"
+                                    data-suggestions-url="/api/part-suggestions"
+                                    placeholder="Enter part number">
+                            <div class="suggestion-list" id="partSuggestions"></div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- EXIF/Metadata Section -->
+                <div class="form-section">
+                    <div class="section-title">📝 Image Metadata</div>
+
+                    <div class="form-group">
+                        <label class="form-label">Title</label>
+                        {% if file.metadata_info and file.metadata_info.title %}
+                        <div class="system-value">System: {{ file.metadata_info.title }}</div>
+                        {% endif %}
+                        <input
+                                type="text"
+                                name="title"
+                                class="form-input"
+                                value="{{ file.metadata_info.title if file.metadata_info else '' }}"
+                                placeholder="Image title">
+                    </div>
+
+                    <div class="form-group">
+                        <label class="form-label">Description</label>
+                        {% if file.metadata_info and file.metadata_info.description %}
+                        <div class="system-value">System: {{ file.metadata_info.description }}</div>
+                        {% endif %}
+                        <textarea
+                                name="description"
+                                class="form-input form-textarea"
+                                placeholder="Image description">{{ file.metadata_info.description if file.metadata_info else '' }}</textarea>
+                    </div>
+
+                    <div class="form-group">
+                        <label class="form-label">Keywords</label>
+                        {% if file.metadata_info and file.metadata_info.keywords %}
+                        <div class="system-value">System: {{ file.metadata_info.keywords }}</div>
+                        {% endif %}
+                        <input
+                                type="text"
+                                name="keywords"
+                                class="form-input"
+                                value="{{ file.metadata_info.keywords if file.metadata_info else '' }}"
+                                placeholder="Comma-separated keywords">
+                    </div>
+                </div>
+
+                <!-- Technical Information -->
+                <div class="form-section">
+                    <div class="section-title">⚙️ Technical Information</div>
+
+                    <div class="form-group">
+                        <label class="form-label">Author</label>
+                        <input
+                                type="text"
+                                name="author"
+                                class="form-input"
+                                value="Crown Automotive Sales Co., Inc."
+                                placeholder="Author/Creator">
+                    </div>
+
+                    <div class="form-group">
+                        <label class="form-label">Copyright</label>
+                        <input
+                                type="text"
+                                name="copyright"
+                                class="form-input"
+                                value="© Crown Automotive Sales Co., Inc."
+                                placeholder="Copyright notice">
+                    </div>
+                </div>
+
+                <!-- Override Reason -->
+                <div class="form-section">
+                    <div class="section-title">💭 Override Information</div>
+
+                    <div class="form-group">
+                        <label class="form-label">Reason for Manual Changes</label>
+                        <textarea
+                                name="override_reason"
+                                class="form-input form-textarea"
+                                placeholder="Optional: Explain why manual changes were needed"></textarea>
+                    </div>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <div class="action-bar">
+        <button type="button" class="btn btn-secondary" onclick="window.history.back()">
+            ← Cancel
+        </button>
+        <button type="button" class="btn btn-primary" onclick="saveChanges()">
+            💾 Save Changes
+        </button>
+        <button type="button" class="btn btn-success" onclick="saveAndApprove()">
+            ✅ Save & Approve
+        </button>
+    </div>
+</div>
+
+<script>
+    // Part number auto-suggestions
+    const partNumberInput = document.querySelector('input[name="part_number"]');
+    const suggestionsDiv = document.getElementById('partSuggestions');
+    let suggestionTimeout;
+
+    partNumberInput.addEventListener('input', function () {
+        clearTimeout(suggestionTimeout);
+
+        const query = this.value.trim();
+        if (query.length < 2) {
+            suggestionsDiv.style.display = 'none';
+            return;
+        }
+
+        suggestionTimeout = setTimeout(() => {
+            fetch(`/api/part-suggestions?q=${encodeURIComponent(query)}`)
+                    .then(response => response.json())
+                    .then(data => {
+                        showSuggestions(data.suggestions || []);
+                    })
+                    .catch(error => {
+                        console.error('Error fetching suggestions:', error);
+                    });
+        }, 300);
+    });
+
+    function showSuggestions(suggestions) {
+        if (suggestions.length === 0) {
+            suggestionsDiv.style.display = 'none';
+            return;
+        }
+
+        suggestionsDiv.innerHTML = '';
+        suggestions.forEach(suggestion => {
+            const item = document.createElement('div');
+            item.className = 'suggestion-item';
+            item.innerHTML = `
+                    <strong>${suggestion.part_number}</strong>
+                    ${suggestion.description ? `<br><small>${suggestion.description}</small>`
+        :
+            ''
+        }
+                `;
+                item.addEventListener('click', () => {
+                    partNumberInput.value = suggestion.part_number;
+                    suggestionsDiv.style.display = 'none';
+
+                    // Auto-fill metadata if available
+                    if (suggestion.description) {
+                        document.querySelector('input[name="title"]').value = suggestion.description;
+                    }
+                    if (suggestion.keywords) {
+                        document.querySelector('input[name="keywords"]').value = suggestion.keywords;
+                    }
+                });
+                suggestionsDiv.appendChild(item);
+            });
+
+            suggestionsDiv.style.display = 'block';
+        }
+
+        // Hide suggestions when clicking outside
+        document.addEventListener('click', function(event) {
+            if (!partNumberInput.contains(event.target) && !suggestionsDiv.contains(event.target)) {
+                suggestionsDiv.style.display = 'none';
+            }
+        });
+
+        function collectFormData() {
+            const formData = new FormData(document.getElementById('metadataForm'));
+            const data = {};
+
+            for (let [key, value] of formData.entries()) {
+                data[key] = value.trim();
+            }
+
+            return data;
+        }
+
+        function saveChanges() {
+            const data = collectFormData();
+
+            fetch('/api/update-metadata', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(data)
+            })
+            .then(response => response.json())
+            .then(result => {
+                if (result.success) {
+                    alert('✅ Metadata updated successfully!');
+                    window.location.href = ` / review / ${data.file_id}`;
+                } else {
+                    alert('❌ Error: ' + (result.error || 'Unknown error'));
+                }
+            })
+            .catch(error => {
+                alert('❌ Network error: ' + error.message);
+            });
+        }
+
+        function saveAndApprove() {
+            const data = collectFormData();
+            data.approve_after_save = true;
+
+            fetch('/api/update-metadata', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(data)
+            })
+            .then(response => response.json())
+            .then(result => {
+                if (result.success) {
+                    alert('✅ Metadata updated and file approved!');
+                    window.location.href = '/';
+                } else {
+                    alert('❌ Error: ' + (result.error || 'Unknown error'));
+                }
+            })
+            .catch(error => {
+                alert('❌ Network error: ' + error.message);
+            });
+        }
+    </script>
+</body>
+</html>

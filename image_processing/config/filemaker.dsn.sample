@@ -1,0 +1,41 @@
+# ===== config/filemaker.dsn.sample =====
+# FileMaker ODBC Connection Configuration
+# Copy this file to filemaker.dsn and update with your actual values
+
+[ODBC]
+DRIVER={FileMaker ODBC}
+SERVER=192.168.10.216
+PORT=2399
+DATABASE=CrownMasterDatabase
+UID=your_username
+PWD=your_password
+# Connection timeout in seconds
+TIMEOUT=30
+# Use SSL (YES/NO)
+SSL=NO
+# Verify SSL certificate (YES/NO)
+SSL_VERIFY=NO
+
+# Alternative JDBC Configuration (fallback)
+# If ODBC fails, the system will attempt JDBC connection
+# Place fmjdbc.jar in the config/ directory for JDBC support
+# JDBC URL format: jdbc:filemaker://SERVER:PORT/DATABASE
+
+# Performance Settings
+FETCHBUFFERSIZE=1024
+CURSOR_SENSITIVITY=1
+
+# Character Encoding
+CHARSET=UTF-8
+
+# Connection Pool Settings (if supported)
+POOL_MIN_SIZE=1
+POOL_MAX_SIZE=10
+POOL_TIMEOUT=300
+
+# Notes:
+# 1. Replace placeholder values with your actual FileMaker server details
+# 2. Ensure the FileMaker ODBC driver is installed on the system
+# 3. The database user should have read-only access to Master and as400_ininter tables
+# 4. For JDBC fallback, download fmjdbc.jar from FileMaker and place in config/
+# 5. Test the connection using: python -m src.cli test
