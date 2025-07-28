@@ -7,17 +7,19 @@ Provides REST API for PSD processing and production format generation
 import logging
 from datetime import datetime
 from typing import Dict, Any, Optional, List
+from pathlib import Path
 
 import uvicorn
+import httpx
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 
 from ..config.settings import settings
 from ..services.image_processing_service import ImageProcessingService
-from ..services.file_monitor_service import FileMonitorService
 from ..services.filemaker_service import FileMakerService
 from ..models.processing_models import FormatGenerationRequest
 from ..models.metadata_models import ExifMetadata
+from ..models.file_models import ProcessedFile, FileMetadata, FileType, FileStatus
 from ..utils.logging_config import setup_logging
 
 # Setup logging
@@ -33,8 +35,10 @@ app = FastAPI(
 
 # Global services
 image_processor: Optional[ImageProcessingService] = None
-file_monitor: Optional[FileMonitorService] = None
 filemaker: Optional[FileMakerService] = None
+
+# File monitor service URL
+FILE_MONITOR_URL = "http://file_monitor:8002"
 
 
 class ProcessingRequestAPI(BaseModel):
@@ -46,15 +50,73 @@ class ProcessingRequestAPI(BaseModel):
     include_brand_icon: bool = False
 
 
+async def get_file_from_monitor(file_id: str) -> Optional[ProcessedFile]:
+    """Get file data from file monitor service via API."""
+    try:
+        async with httpx.AsyncClient() as client:
+            response = await client.get(f"{FILE_MONITOR_URL}/files/{file_id}")
+
+            if response.status_code == 404:
+                return None
+            elif response.status_code != 200:
+                logger.error(f"File monitor API error: {response.status_code}")
+                return None
+
+            file_data = response.json()
+
+            # Convert API response back to ProcessedFile object
+            metadata = FileMetadata(
+                file_id=file_data["file_id"],
+                original_path=Path(file_data["current_location"]),
+                filename=file_data["filename"],
+                file_type=FileType(file_data["file_type"]),
+                size_bytes=int(file_data["size_mb"] * 1024 * 1024),  # Convert back to bytes
+                checksum_md5="",  # Not needed for processing
+                checksum_sha256=file_data["checksum"],
+                modified_at=datetime.now(),
+                status=FileStatus(file_data["status"])
+            )
+
+            processed_file = ProcessedFile(
+                metadata=metadata,
+                current_location=Path(file_data["current_location"]),
+                part_number=file_data.get("part_number"),
+                processing_history=file_data.get("processing_history", [])
+            )
+
+            return processed_file
+
+    except Exception as e:
+        logger.error(f"Error getting file from monitor: {e}")
+        return None
+
+
+async def update_file_status(file_id: str, status: str, reason: str = None) -> bool:
+    """Update file status via file monitor API."""
+    try:
+        async with httpx.AsyncClient() as client:
+            data = {"status": status}
+            if reason:
+                data["reason"] = reason
+
+            response = await client.put(f"{FILE_MONITOR_URL}/files/{file_id}/status",
+                                        params=data)
+
+            return response.status_code == 200
+
+    except Exception as e:
+        logger.error(f"Error updating file status: {e}")
+        return False
+
+
 @app.on_event("startup")
 async def startup_event():
     """Initialize services on startup."""
-    global image_processor, file_monitor, filemaker
+    global image_processor, filemaker
 
     try:
         logger.info("Initializing image processor services...")
         image_processor = ImageProcessingService()
-        file_monitor = FileMonitorService()
         filemaker = FileMakerService()
         logger.info("Image processor services initialized successfully")
     except Exception as e:
@@ -65,13 +127,22 @@ async def startup_event():
 @app.get("/health")
 async def health_check():
     """Health check endpoint."""
+    # Test connection to file monitor
+    file_monitor_healthy = False
+    try:
+        async with httpx.AsyncClient() as client:
+            response = await client.get(f"{FILE_MONITOR_URL}/health", timeout=5.0)
+            file_monitor_healthy = response.status_code == 200
+    except:
+        pass
+
     return {
         "status": "healthy",
         "timestamp": datetime.now().isoformat(),
         "services": {
             "image_processor": image_processor is not None,
-            "file_monitor": file_monitor is not None,
-            "filemaker": filemaker is not None and filemaker.test_connection()
+            "file_monitor_api": file_monitor_healthy,
+            "filemaker": filemaker is not None and filemaker.test_connection() if filemaker else False
         }
     }
 
@@ -80,11 +151,11 @@ async def health_check():
 async def process_image(request: ProcessingRequestAPI) -> Dict[str, Any]:
     """Process image file into production formats."""
     try:
-        if not all([image_processor, file_monitor, filemaker]):
+        if not image_processor or not filemaker:
             raise HTTPException(status_code=503, detail="Services not initialized")
 
-        # Get file object
-        file_obj = file_monitor.get_file_by_id(request.file_id)
+        # Get file object from file monitor service
+        file_obj = await get_file_from_monitor(request.file_id)
         if not file_obj:
             raise HTTPException(status_code=404, detail=f"File not found: {request.file_id}")
 
@@ -110,20 +181,20 @@ async def process_image(request: ProcessingRequestAPI) -> Dict[str, Any]:
         )
 
         # Update status to processing
-        file_monitor.update_file_status(request.file_id, "processing")
+        await update_file_status(request.file_id, "processing")
 
         # Process formats
         result = image_processor.generate_formats(file_obj, format_request, exif_metadata)
 
         # Update status based on result
         if result.success:
-            file_monitor.update_file_status(
+            await update_file_status(
                 request.file_id,
                 "approved",
                 f"Generated {result.metadata['successful_formats']} formats"
             )
         else:
-            file_monitor.update_file_status(
+            await update_file_status(
                 request.file_id,
                 "failed",
                 "Format generation failed"
@@ -142,6 +213,11 @@ async def process_image(request: ProcessingRequestAPI) -> Dict[str, Any]:
         raise
     except Exception as e:
         logger.error(f"Processing error: {e}")
+        # Update status to failed
+        try:
+            await update_file_status(request.file_id, "failed", str(e))
+        except:
+            pass
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -184,6 +260,7 @@ async def get_status():
             "status": "running",
             "formats_available": len(image_processor.output_specs),
             "database_connected": filemaker.test_connection() if filemaker else False,
+            "file_monitor_url": FILE_MONITOR_URL,
             "last_check": datetime.now().isoformat()
         }
 

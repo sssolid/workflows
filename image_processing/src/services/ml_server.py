@@ -11,14 +11,15 @@ from pathlib import Path
 from typing import Dict, Any, Optional
 
 import uvicorn
+import httpx
 from fastapi import FastAPI, HTTPException, BackgroundTasks
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
 from ..config.settings import settings
 from ..services.background_removal_service import BackgroundRemovalService
-from ..services.file_monitor_service import FileMonitorService
 from ..models.processing_models import BackgroundRemovalRequest, ProcessingResult
+from ..models.file_models import ProcessedFile, FileMetadata, FileType, FileStatus
 from ..utils.logging_config import setup_logging
 
 # Setup logging
@@ -34,7 +35,9 @@ app = FastAPI(
 
 # Global services
 bg_removal_service: Optional[BackgroundRemovalService] = None
-file_monitor: Optional[FileMonitorService] = None
+
+# File monitor service URL
+FILE_MONITOR_URL = "http://file_monitor:8002"
 
 
 class ProcessingRequestAPI(BaseModel):
@@ -46,15 +49,76 @@ class ProcessingRequestAPI(BaseModel):
     alpha_threshold: int = 40
 
 
+async def get_file_from_monitor(file_id: str) -> Optional[ProcessedFile]:
+    """Get file data from file monitor service via API."""
+    try:
+        async with httpx.AsyncClient() as client:
+            response = await client.get(f"{FILE_MONITOR_URL}/files/{file_id}")
+
+            if response.status_code == 404:
+                return None
+            elif response.status_code != 200:
+                logger.error(f"File monitor API error: {response.status_code}")
+                return None
+
+            file_data = response.json()
+
+            # Convert API response back to ProcessedFile object
+            metadata = FileMetadata(
+                file_id=file_data["file_id"],
+                original_path=Path(file_data["current_location"]),
+                filename=file_data["filename"],
+                file_type=FileType(file_data["file_type"]),
+                size_bytes=int(file_data["size_mb"] * 1024 * 1024),  # Convert back to bytes
+                checksum_md5="",  # Not needed for processing
+                checksum_sha256=file_data["checksum"],
+                modified_at=datetime.now(),
+                status=FileStatus(file_data["status"])
+            )
+
+            processed_file = ProcessedFile(
+                metadata=metadata,
+                current_location=Path(file_data["current_location"]),
+                part_number=file_data.get("part_number"),
+                processing_history=file_data.get("processing_history", [])
+            )
+
+            return processed_file
+
+    except Exception as e:
+        logger.error(f"Error getting file from monitor: {e}")
+        return None
+
+
+async def update_file_status(file_id: str, status: str, reason: str = None, new_location: str = None) -> bool:
+    """Update file status via file monitor API."""
+    try:
+        async with httpx.AsyncClient() as client:
+            params = {"status": status}
+            if reason:
+                params["reason"] = reason
+
+            response = await client.put(f"{FILE_MONITOR_URL}/files/{file_id}/status",
+                                        params=params)
+
+            # TODO: Add support for updating file location in the API
+            # For now, we'll handle location updates separately if needed
+
+            return response.status_code == 200
+
+    except Exception as e:
+        logger.error(f"Error updating file status: {e}")
+        return False
+
+
 @app.on_event("startup")
 async def startup_event():
     """Initialize services on startup."""
-    global bg_removal_service, file_monitor
+    global bg_removal_service
 
     try:
         logger.info("Initializing ML services...")
         bg_removal_service = BackgroundRemovalService()
-        file_monitor = FileMonitorService()
         logger.info("ML services initialized successfully")
     except Exception as e:
         logger.error(f"Failed to initialize ML services: {e}")
@@ -64,12 +128,21 @@ async def startup_event():
 @app.get("/health")
 async def health_check():
     """Health check endpoint."""
+    # Test connection to file monitor
+    file_monitor_healthy = False
+    try:
+        async with httpx.AsyncClient() as client:
+            response = await client.get(f"{FILE_MONITOR_URL}/health", timeout=5.0)
+            file_monitor_healthy = response.status_code == 200
+    except:
+        pass
+
     return {
         "status": "healthy",
         "timestamp": datetime.now().isoformat(),
         "services": {
             "background_removal": bg_removal_service is not None,
-            "file_monitor": file_monitor is not None
+            "file_monitor_api": file_monitor_healthy
         }
     }
 
@@ -78,11 +151,11 @@ async def health_check():
 async def remove_background_api(request: ProcessingRequestAPI) -> Dict[str, Any]:
     """Remove background from image via API."""
     try:
-        if not bg_removal_service or not file_monitor:
+        if not bg_removal_service:
             raise HTTPException(status_code=503, detail="Services not initialized")
 
-        # Get file object
-        file_obj = file_monitor.get_file_by_id(request.file_id)
+        # Get file object from file monitor service
+        file_obj = await get_file_from_monitor(request.file_id)
         if not file_obj:
             raise HTTPException(status_code=404, detail=f"File not found: {request.file_id}")
 
@@ -95,19 +168,22 @@ async def remove_background_api(request: ProcessingRequestAPI) -> Dict[str, Any]
             alpha_threshold=request.alpha_threshold
         )
 
+        # Update status to processing
+        await update_file_status(request.file_id, "processing", "Starting background removal")
+
         # Process the image
         result = bg_removal_service.remove_background(file_obj, bg_request)
 
-        # Update file status
+        # Update file status based on result
         if result.success:
-            file_monitor.update_file_status(
+            await update_file_status(
                 request.file_id,
                 "awaiting_review",
                 "Background removal completed",
-                result.output_path
+                str(result.output_path) if result.output_path else None
             )
         else:
-            file_monitor.update_file_status(
+            await update_file_status(
                 request.file_id,
                 "failed",
                 result.error_message
@@ -127,6 +203,11 @@ async def remove_background_api(request: ProcessingRequestAPI) -> Dict[str, Any]
         raise
     except Exception as e:
         logger.error(f"Background removal API error: {e}")
+        # Update status to failed
+        try:
+            await update_file_status(request.file_id, "failed", str(e))
+        except:
+            pass
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -153,9 +234,9 @@ async def get_status():
             "timestamp": datetime.now().isoformat(),
             "services": {
                 "background_removal": bg_removal_service is not None,
-                "file_monitor": file_monitor is not None
             },
-            "models_loaded": len(bg_removal_service.models_cache) if bg_removal_service else 0
+            "models_loaded": len(bg_removal_service.models_cache) if bg_removal_service else 0,
+            "file_monitor_url": FILE_MONITOR_URL
         }
     except Exception as e:
         logger.error(f"Status check error: {e}")

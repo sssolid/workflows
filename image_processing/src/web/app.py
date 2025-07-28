@@ -11,11 +11,11 @@ from datetime import datetime
 from pathlib import Path
 from typing import Dict, List, Optional
 
+import httpx
 from flask import Flask, render_template, request, jsonify, send_file, redirect, url_for, flash
 from werkzeug.utils import secure_filename
 
 from ..config.settings import settings
-from ..services.file_monitor_service import FileMonitorService
 from ..services.part_mapping_service import PartMappingService
 from ..services.filemaker_service import FileMakerService
 from ..services.notification_service import NotificationService
@@ -28,6 +28,9 @@ from ..utils.logging_config import setup_logging
 setup_logging(settings.log_level)
 logger = logging.getLogger(__name__)
 
+# Service URLs
+FILE_MONITOR_URL = "http://file_monitor:8002"
+
 
 def create_app() -> Flask:
     """Create and configure Flask application."""
@@ -36,16 +39,9 @@ def create_app() -> Flask:
     app.config['MAX_CONTENT_LENGTH'] = settings.processing.max_file_size_bytes
 
     # Initialize services (gracefully handle failures)
-    file_monitor = None
     part_mapper = None
     filemaker = None
     notifier = None
-
-    try:
-        file_monitor = FileMonitorService()
-        logger.info("File monitor service initialized")
-    except Exception as e:
-        logger.warning(f"File monitor service failed to initialize: {e}")
 
     try:
         part_mapper = PartMappingService()
@@ -65,69 +61,131 @@ def create_app() -> Flask:
     except Exception as e:
         logger.warning(f"Notification service failed to initialize: {e}")
 
+    async def get_files_by_status(status: str) -> List[Dict]:
+        """Get files by status from file monitor service."""
+        try:
+            async with httpx.AsyncClient() as client:
+                response = await client.get(f"{FILE_MONITOR_URL}/processable")
+
+                if response.status_code != 200:
+                    logger.error(f"File monitor API error: {response.status_code}")
+                    return []
+
+                data = response.json()
+                files = data.get('new_files', [])
+
+                # Filter by status
+                return [f for f in files if f.get('status') == status]
+
+        except Exception as e:
+            logger.error(f"Error getting files by status: {e}")
+            return []
+
+    async def get_file_by_id(file_id: str) -> Optional[Dict]:
+        """Get file by ID from file monitor service."""
+        try:
+            async with httpx.AsyncClient() as client:
+                response = await client.get(f"{FILE_MONITOR_URL}/files/{file_id}")
+
+                if response.status_code == 404:
+                    return None
+                elif response.status_code != 200:
+                    logger.error(f"File monitor API error: {response.status_code}")
+                    return None
+
+                return response.json()
+
+        except Exception as e:
+            logger.error(f"Error getting file by ID: {e}")
+            return None
+
+    async def update_file_status_api(file_id: str, status: str, reason: str = None) -> bool:
+        """Update file status via API."""
+        try:
+            async with httpx.AsyncClient() as client:
+                params = {"status": status}
+                if reason:
+                    params["reason"] = reason
+
+                response = await client.put(f"{FILE_MONITOR_URL}/files/{file_id}/status",
+                                            params=params)
+
+                return response.status_code == 200
+
+        except Exception as e:
+            logger.error(f"Error updating file status: {e}")
+            return False
+
     @app.route('/')
     def dashboard():
         """Main dashboard."""
         try:
-            # Try to get current status, but handle if services aren't ready yet
-            if not file_monitor:
-                return render_template('dashboard.html',
-                                       pending_files=[],
-                                       completed_files=[],
-                                       stats={'pending': 0, 'completed': 0, 'processing': 0, 'failed': 0},
-                                       server_url=f"http://{settings.web.host}:{settings.web.port}",
-                                       upload_enabled=True
-                                       )
+            import asyncio
 
-            # Get current status
-            pending_files = file_monitor.get_files_by_status(FileStatus.AWAITING_REVIEW)
-            completed_files = file_monitor.get_files_by_status(FileStatus.APPROVED)
-            processing_files = file_monitor.get_files_by_status(FileStatus.PROCESSING)
-            failed_files = file_monitor.get_files_by_status(FileStatus.FAILED)
+            # Try to get current status, but handle if services aren't ready yet
+            try:
+                # Get status from file monitor
+                loop = asyncio.new_event_loop()
+                asyncio.set_event_loop(loop)
+
+                pending_files = loop.run_until_complete(get_files_by_status('awaiting_review'))
+                completed_files = loop.run_until_complete(get_files_by_status('approved'))
+                processing_files = loop.run_until_complete(get_files_by_status('processing'))
+                failed_files = loop.run_until_complete(get_files_by_status('failed'))
+
+                loop.close()
+
+            except Exception as e:
+                logger.error(f"Error getting file statuses: {e}")
+                # Fallback to empty data
+                pending_files = []
+                completed_files = []
+                processing_files = []
+                failed_files = []
 
             # Add part mapping info to pending files
             pending_data = []
             for f in pending_files[:10]:
                 file_data = {
-                    'file_id': f.metadata.file_id,
-                    'filename': f.metadata.filename,
-                    'size_mb': f.metadata.size_mb,
-                    'status': f.metadata.status.value,
-                    'created_at': f.metadata.created_at.strftime('%Y-%m-%d %H:%M'),
-                    'preview_url': f'/api/preview/{f.metadata.file_id}',
-                    'review_url': f'/review/{f.metadata.file_id}',
-                    'edit_url': f'/edit/{f.metadata.file_id}'
+                    'file_id': f.get('file_id'),
+                    'filename': f.get('filename'),
+                    'size_mb': f.get('size_mb'),
+                    'status': f.get('status'),
+                    'created_at': datetime.now().strftime('%Y-%m-%d %H:%M'),  # TODO: Parse from API
+                    'preview_url': f'/api/preview/{f.get("file_id")}',
+                    'review_url': f'/review/{f.get("file_id")}',
+                    'edit_url': f'/edit/{f.get("file_id")}'
                 }
 
-                # Add part mapping if available
-                if not f.part_number and part_mapper:
+                # Add part mapping if available and part_mapper is ready
+                if not f.get('part_number') and part_mapper:
                     try:
-                        mapping_result = part_mapper.map_filename_to_part_number(f.metadata.filename)
+                        mapping_result = part_mapper.map_filename_to_part_number(f.get('filename', ''))
                         if mapping_result.mapped_part_number:
                             file_data['suggested_part'] = mapping_result.mapped_part_number
                             file_data['mapping_confidence'] = mapping_result.confidence_score
                             file_data['needs_review'] = mapping_result.requires_manual_review
                     except Exception as e:
-                        logger.warning(f"Part mapping failed for {f.metadata.filename}: {e}")
+                        logger.warning(f"Part mapping failed for {f.get('filename')}: {e}")
 
                 pending_data.append(file_data)
 
             # Enhanced stats
             stats = {
-                'pending': len(pending_files) if pending_files else 0,
-                'completed': len(completed_files) if completed_files else 0,
-                'processing': len(processing_files) if processing_files else 0,
-                'failed': len(failed_files) if failed_files else 0
+                'pending': len(pending_files),
+                'completed': len(completed_files),
+                'processing': len(processing_files),
+                'failed': len(failed_files)
             }
 
             completed_data = []
             if completed_files:
                 completed_data = [
                     {
-                        'file_id': f.metadata.file_id,
-                        'filename': f.metadata.filename,
-                        'size_mb': f.metadata.size_mb,
-                        'completed_at': f.metadata.created_at.strftime('%Y-%m-%d %H:%M')
+                        'file_id': f.get('file_id'),
+                        'filename': f.get('filename'),
+                        'size_mb': f.get('size_mb'),
+                        'completed_at': datetime.now().strftime('%Y-%m-%d %H:%M')  # TODO: Parse from API
                     }
                     for f in completed_files[:10]
                 ]
@@ -144,7 +202,7 @@ def create_app() -> Flask:
             return render_template('error.html', error=str(e)), 500
 
     @app.route('/upload', methods=['GET', 'POST'])
-    def upload_file():
+    async def upload_file():
         """File upload interface."""
         if request.method == 'POST':
             if 'file' not in request.files:
@@ -186,15 +244,18 @@ def create_app() -> Flask:
                     file.save(upload_path)
                     logger.info(f"File uploaded: {upload_path.name}")
 
-                    # Try to trigger discovery if file monitor is available
-                    if file_monitor:
-                        try:
-                            # Give the file a moment to be fully written
-                            import time
-                            time.sleep(0.5)
-                            file_monitor.discover_new_files()
-                        except Exception as e:
-                            logger.warning(f"Failed to trigger file discovery: {e}")
+                    # Try to trigger discovery via API
+                    try:
+                        import asyncio
+                        loop = asyncio.new_event_loop()
+                        asyncio.set_event_loop(loop)
+
+                        async with httpx.AsyncClient() as client:
+                            await client.get(f"{FILE_MONITOR_URL}/scan")
+
+                        loop.close()
+                    except Exception as e:
+                        logger.warning(f"Failed to trigger file discovery: {e}")
 
                     return jsonify({
                         'success': True,
@@ -210,95 +271,126 @@ def create_app() -> Flask:
     @app.route('/review/<file_id>')
     def review_file(file_id: str):
         """File review interface."""
-        if not file_monitor:
-            return render_template('error.html', error='File monitor service not available'), 503
+        import asyncio
 
-        file_obj = file_monitor.get_file_by_id(file_id)
-        if not file_obj:
-            return render_template('error.html', error='File not found'), 404
+        try:
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
 
-        # Get part mapping if not already done
-        part_mapping = None
-        if not file_obj.part_number and part_mapper:
-            try:
-                part_mapping = part_mapper.map_filename_to_part_number(file_obj.metadata.filename)
-            except Exception as e:
-                logger.warning(f"Part mapping failed: {e}")
+            file_data = loop.run_until_complete(get_file_by_id(file_id))
+            loop.close()
 
-        # Get part metadata if we have a part number
-        part_metadata = None
-        part_number = file_obj.part_number or (part_mapping.mapped_part_number if part_mapping else None)
-        if part_number and filemaker:
-            try:
-                part_metadata = filemaker.get_part_metadata(part_number)
-            except Exception as e:
-                logger.warning(f"Failed to get part metadata: {e}")
+            if not file_data:
+                return render_template('error.html', error='File not found'), 404
 
-        return render_template('review.html',
-                               file={
-                                   'file_id': file_obj.metadata.file_id,
-                                   'filename': file_obj.metadata.filename,
-                                   'status': file_obj.metadata.status.value,
-                                   'size_mb': file_obj.metadata.size_mb,
-                                   'dimensions': file_obj.dimensions.dict() if file_obj.dimensions else None,
-                                   'part_number': part_number,
-                                   'part_mapping': part_mapping.dict() if part_mapping else None,
-                                   'part_metadata': part_metadata.dict() if part_metadata else None,
-                                   'processing_history': file_obj.processing_history
-                               },
-                               server_url=f"http://{settings.web.host}:{settings.web.port}"
-                               )
+            # Get part mapping if not already done
+            part_mapping = None
+            if not file_data.get('part_number') and part_mapper:
+                try:
+                    part_mapping = part_mapper.map_filename_to_part_number(file_data['filename'])
+                except Exception as e:
+                    logger.warning(f"Part mapping failed: {e}")
+
+            # Get part metadata if we have a part number
+            part_metadata = None
+            part_number = file_data.get('part_number') or (part_mapping.mapped_part_number if part_mapping else None)
+            if part_number and filemaker:
+                try:
+                    part_metadata = filemaker.get_part_metadata(part_number)
+                except Exception as e:
+                    logger.warning(f"Failed to get part metadata: {e}")
+
+            return render_template('review.html',
+                                   file={
+                                       'file_id': file_data['file_id'],
+                                       'filename': file_data['filename'],
+                                       'status': file_data['status'],
+                                       'size_mb': file_data['size_mb'],
+                                       'dimensions': None,  # TODO: Add to API
+                                       'part_number': part_number,
+                                       'part_mapping': part_mapping.dict() if part_mapping else None,
+                                       'part_metadata': part_metadata.dict() if part_metadata else None,
+                                       'processing_history': file_data.get('processing_history', [])
+                                   },
+                                   server_url=f"http://{settings.web.host}:{settings.web.port}"
+                                   )
+        except Exception as e:
+            logger.error(f"Review error: {e}")
+            return render_template('error.html', error=str(e)), 500
 
     @app.route('/edit/<file_id>')
     def edit_metadata(file_id: str):
         """Metadata editing interface."""
-        if not file_monitor:
-            return render_template('error.html', error='File monitor service not available'), 503
+        import asyncio
 
-        file_obj = file_monitor.get_file_by_id(file_id)
-        if not file_obj:
-            return render_template('error.html', error='File not found'), 404
+        try:
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
 
-        # Get part mapping if not already done
-        part_mapping = None
-        if not file_obj.part_number and part_mapper:
-            try:
-                part_mapping = part_mapper.map_filename_to_part_number(file_obj.metadata.filename)
-            except Exception as e:
-                logger.warning(f"Part mapping failed: {e}")
+            file_data = loop.run_until_complete(get_file_by_id(file_id))
+            loop.close()
 
-        # Get current metadata
-        part_number = file_obj.part_number or (part_mapping.mapped_part_number if part_mapping else None)
-        part_metadata = None
-        if part_number and filemaker:
-            try:
-                part_metadata = filemaker.get_part_metadata(part_number)
-            except Exception as e:
-                logger.warning(f"Failed to get part metadata: {e}")
+            if not file_data:
+                return render_template('error.html', error='File not found'), 404
 
-        return render_template('edit_metadata.html',
-                               file={
-                                   'file_id': file_obj.metadata.file_id,
-                                   'filename': file_obj.metadata.filename,
-                                   'status': file_obj.metadata.status.value,
-                                   'size_mb': file_obj.metadata.size_mb,
-                                   'part_number': part_number,
-                                   'part_mapping': part_mapping.dict() if part_mapping else None,
-                                   'metadata_info': part_metadata.dict() if part_metadata else None,
-                                   'processing_history': file_obj.processing_history
-                               },
-                               server_url=f"http://{settings.web.host}:{settings.web.port}"
-                               )
+            # Get part mapping if not already done
+            part_mapping = None
+            if not file_data.get('part_number') and part_mapper:
+                try:
+                    part_mapping = part_mapper.map_filename_to_part_number(file_data['filename'])
+                except Exception as e:
+                    logger.warning(f"Part mapping failed: {e}")
+
+            # Get current metadata
+            part_number = file_data.get('part_number') or (part_mapping.mapped_part_number if part_mapping else None)
+            part_metadata = None
+            if part_number and filemaker:
+                try:
+                    part_metadata = filemaker.get_part_metadata(part_number)
+                except Exception as e:
+                    logger.warning(f"Failed to get part metadata: {e}")
+
+            return render_template('edit_metadata.html',
+                                   file={
+                                       'file_id': file_data['file_id'],
+                                       'filename': file_data['filename'],
+                                       'status': file_data['status'],
+                                       'size_mb': file_data['size_mb'],
+                                       'part_number': part_number,
+                                       'part_mapping': part_mapping.dict() if part_mapping else None,
+                                       'metadata_info': part_metadata.dict() if part_metadata else None,
+                                       'processing_history': file_data.get('processing_history', [])
+                                   },
+                                   server_url=f"http://{settings.web.host}:{settings.web.port}"
+                                   )
+        except Exception as e:
+            logger.error(f"Edit metadata error: {e}")
+            return render_template('error.html', error=str(e)), 500
 
     @app.route('/test')
-    def test_route():
+    async def test_route():
         """Simple test route to verify Flask is working."""
+        # Test file monitor connection
+        file_monitor_status = False
+        try:
+            import asyncio
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+
+            async with httpx.AsyncClient() as client:
+                response = await client.get(f"{FILE_MONITOR_URL}/health", timeout=5.0)
+                file_monitor_status = response.status_code == 200
+
+            loop.close()
+        except:
+            pass
+
         return jsonify({
             'status': 'ok',
             'message': 'Flask app is running',
             'timestamp': datetime.now().isoformat(),
             'services': {
-                'file_monitor': file_monitor is not None,
+                'file_monitor_api': file_monitor_status,
                 'part_mapper': part_mapper is not None,
                 'filemaker': filemaker is not None,
                 'notifier': notifier is not None
@@ -306,21 +398,41 @@ def create_app() -> Flask:
         })
 
     @app.route('/api/status')
-    def api_status():
+    async def api_status():
         """API endpoint for system status."""
         try:
-            if not file_monitor:
-                return jsonify({
-                    'error': 'File monitor not available',
-                    'timestamp': datetime.now().isoformat()
-                }), 503
+            import asyncio
+
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+
+            # Get stats from file monitor service
+            try:
+                async with httpx.AsyncClient() as client:
+                    response = await client.get(f"{FILE_MONITOR_URL}/status")
+
+                    if response.status_code == 200:
+                        monitor_data = response.json()
+                        total_tracked = monitor_data.get('total_tracked_files', 0)
+                    else:
+                        total_tracked = 0
+            except:
+                total_tracked = 0
+
+            # Get file counts by status
+            pending_files = loop.run_until_complete(get_files_by_status('awaiting_review'))
+            processing_files = loop.run_until_complete(get_files_by_status('processing'))
+            completed_files = loop.run_until_complete(get_files_by_status('approved'))
+            failed_files = loop.run_until_complete(get_files_by_status('failed'))
+
+            loop.close()
 
             stats = {
-                'pending': len(file_monitor.get_files_by_status(FileStatus.AWAITING_REVIEW)),
-                'processing': len(file_monitor.get_files_by_status(FileStatus.PROCESSING)),
-                'completed': len(file_monitor.get_files_by_status(FileStatus.APPROVED)),
-                'failed': len(file_monitor.get_files_by_status(FileStatus.FAILED)),
-                'total_tracked': len(file_monitor._tracked_files),
+                'pending': len(pending_files),
+                'processing': len(processing_files),
+                'completed': len(completed_files),
+                'failed': len(failed_files),
+                'total_tracked': total_tracked,
                 'database_connected': filemaker.test_connection() if filemaker else False,
                 'part_mapper_ready': len(part_mapper.interchange_cache) > 0 if part_mapper else False,
                 'timestamp': datetime.now().isoformat()
@@ -331,6 +443,92 @@ def create_app() -> Flask:
         except Exception as e:
             logger.error(f"Status API error: {e}")
             return jsonify({'error': str(e)}), 500
+
+    @app.route('/api/approve/<file_id>', methods=['POST'])
+    def api_approve_file(file_id: str):
+        """API endpoint to approve a file for production."""
+        try:
+            import asyncio
+
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+
+            success = loop.run_until_complete(update_file_status_api(
+                file_id,
+                "approved",
+                "Approved for production processing"
+            ))
+
+            loop.close()
+
+            if success:
+                return jsonify({
+                    'success': True,
+                    'message': 'File approved for production processing'
+                })
+            else:
+                return jsonify({'error': 'File not found or update failed'}), 404
+
+        except Exception as e:
+            logger.error(f"Approval API error: {e}")
+            return jsonify({'error': str(e)}), 500
+
+    @app.route('/api/reject/<file_id>', methods=['POST'])
+    def api_reject_file(file_id: str):
+        """API endpoint to reject a file."""
+        try:
+            import asyncio
+
+            data = request.get_json() or {}
+            reason = data.get('reason', 'Quality insufficient')
+
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+
+            success = loop.run_until_complete(update_file_status_api(
+                file_id,
+                "rejected",
+                reason
+            ))
+
+            loop.close()
+
+            if success:
+                return jsonify({
+                    'success': True,
+                    'message': 'File rejected'
+                })
+            else:
+                return jsonify({'error': 'File not found or update failed'}), 404
+
+        except Exception as e:
+            logger.error(f"Rejection API error: {e}")
+            return jsonify({'error': str(e)}), 500
+
+    @app.route('/api/preview/<file_id>')
+    def api_preview_image(file_id: str):
+        """Serve preview image for a file."""
+        try:
+            import asyncio
+
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+
+            file_data = loop.run_until_complete(get_file_by_id(file_id))
+            loop.close()
+
+            if not file_data:
+                return "Image not found", 404
+
+            file_path = Path(file_data['current_location'])
+            if not file_path.exists():
+                return "Image file not found on disk", 404
+
+            return send_file(file_path)
+
+        except Exception as e:
+            logger.error(f"Preview API error: {e}")
+            return "Error serving image", 500
 
     @app.route('/api/part-suggestions')
     def api_part_suggestions():
@@ -369,201 +567,6 @@ def create_app() -> Flask:
         except Exception as e:
             logger.error(f"Part suggestions API error: {e}")
             return jsonify({'suggestions': [], 'error': str(e)})
-
-    @app.route('/api/update-metadata', methods=['POST'])
-    def api_update_metadata():
-        """API endpoint to update file metadata with manual overrides."""
-        try:
-            if not file_monitor:
-                return jsonify({'error': 'File monitor service not available'}), 503
-
-            data = request.get_json()
-            file_id = data.get('file_id')
-
-            if not file_id:
-                return jsonify({'error': 'File ID required'}), 400
-
-            file_obj = file_monitor.get_file_by_id(file_id)
-            if not file_obj:
-                return jsonify({'error': 'File not found'}), 404
-
-            # Validate part number if provided
-            part_number = data.get('part_number', '').strip()
-            if part_number and part_mapper and not part_mapper.validate_part_number(part_number):
-                return jsonify({'error': f'Part number {part_number} not found in database'}), 400
-
-            # Create manual overrides for changed values
-            overrides = []
-            current_user = "web_user"  # TODO: Get from session/auth
-
-            # Check part number override
-            if part_number and part_number != file_obj.part_number:
-                overrides.append(ManualOverride(
-                    file_id=file_id,
-                    override_type="part_number",
-                    system_value=file_obj.part_number,
-                    user_value=part_number,
-                    override_reason=data.get('override_reason'),
-                    overridden_by=current_user
-                ))
-                file_obj.part_number = part_number
-
-            # Store overrides in file history
-            for override in overrides:
-                file_obj.add_processing_step("manual_override", override.dict())
-
-            # Update file metadata
-            file_obj.add_processing_step("metadata_updated", {
-                "updated_fields": list(data.keys()),
-                "user": current_user,
-                "reason": data.get('override_reason')
-            })
-
-            # If approve_after_save is true, approve the file
-            if data.get('approve_after_save'):
-                file_monitor.update_file_status(
-                    file_id,
-                    FileStatus.APPROVED,
-                    "Manually reviewed and approved"
-                )
-
-                # Trigger format generation
-                logger.info(f"File {file_id} approved after manual review")
-
-            return jsonify({
-                'success': True,
-                'message': 'Metadata updated successfully',
-                'approved': data.get('approve_after_save', False)
-            })
-
-        except Exception as e:
-            logger.error(f"Update metadata API error: {e}")
-            return jsonify({'error': str(e)}), 500
-
-    @app.route('/api/approve/<file_id>', methods=['POST'])
-    def api_approve_file(file_id: str):
-        """API endpoint to approve a file for production."""
-        try:
-            if not file_monitor:
-                return jsonify({'error': 'File monitor service not available'}), 503
-
-            success = file_monitor.update_file_status(
-                file_id,
-                FileStatus.APPROVED,
-                "Approved for production processing"
-            )
-
-            if success:
-                return jsonify({
-                    'success': True,
-                    'message': 'File approved for production processing'
-                })
-            else:
-                return jsonify({'error': 'File not found'}), 404
-
-        except Exception as e:
-            logger.error(f"Approval API error: {e}")
-            return jsonify({'error': str(e)}), 500
-
-    @app.route('/api/reject/<file_id>', methods=['POST'])
-    def api_reject_file(file_id: str):
-        """API endpoint to reject a file."""
-        try:
-            if not file_monitor:
-                return jsonify({'error': 'File monitor service not available'}), 503
-
-            data = request.get_json() or {}
-            reason = data.get('reason', 'Quality insufficient')
-
-            success = file_monitor.update_file_status(
-                file_id,
-                FileStatus.REJECTED,
-                reason
-            )
-
-            if success:
-                return jsonify({
-                    'success': True,
-                    'message': 'File rejected'
-                })
-            else:
-                return jsonify({'error': 'File not found'}), 404
-
-        except Exception as e:
-            logger.error(f"Rejection API error: {e}")
-            return jsonify({'error': str(e)}), 500
-
-    @app.route('/api/preview/<file_id>')
-    def api_preview_image(file_id: str):
-        """Serve preview image for a file."""
-        try:
-            if not file_monitor:
-                return "File monitor not available", 503
-
-            file_obj = file_monitor.get_file_by_id(file_id)
-            if not file_obj or not file_obj.current_location:
-                return "Image not found", 404
-
-            if not file_obj.current_location.exists():
-                return "Image file not found on disk", 404
-
-            return send_file(file_obj.current_location)
-
-        except Exception as e:
-            logger.error(f"Preview API error: {e}")
-            return "Error serving image", 500
-
-    @app.route('/api/decisions/pending')
-    def api_pending_decisions():
-        """API endpoint for checking pending decisions (for n8n)."""
-        try:
-            if not file_monitor:
-                return jsonify({'decisions': [], 'count': 0, 'error': 'File monitor not available'})
-
-            # Check for files that were just approved/rejected
-            decisions = []
-
-            # Get recently approved files
-            approved_files = file_monitor.get_files_by_status(FileStatus.APPROVED)
-            for file_obj in approved_files:
-                # Check if this is a recent approval
-                if file_obj.processing_history:
-                    last_step = file_obj.processing_history[-1]
-                    if last_step.get('step') == 'status_change' and \
-                            last_step.get('details', {}).get('to') == FileStatus.APPROVED.value:
-                        decisions.append({
-                            'file_id': file_obj.metadata.file_id,
-                            'action': 'approve',
-                            'decision_id': f"approve_{file_obj.metadata.file_id}",
-                            'timestamp': last_step.get('timestamp')
-                        })
-
-            return jsonify({
-                'decisions': decisions,
-                'count': len(decisions)
-            })
-
-        except Exception as e:
-            logger.error(f"Pending decisions API error: {e}")
-            return jsonify({'decisions': [], 'count': 0, 'error': str(e)})
-
-    @app.route('/browse/production/')
-    def browse_production():
-        """Browse production files."""
-        try:
-            production_dir = settings.processing.production_dir
-            if not production_dir.exists():
-                return render_template('error.html', error='Production directory not found'), 404
-
-            # This would list production files - implementation depends on requirements
-            return jsonify({
-                'message': 'Production file browsing not yet implemented',
-                'production_dir': str(production_dir)
-            })
-
-        except Exception as e:
-            logger.error(f"Browse production error: {e}")
-            return render_template('error.html', error=str(e)), 500
 
     @app.errorhandler(404)
     def not_found(error):

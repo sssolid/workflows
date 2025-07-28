@@ -40,6 +40,19 @@ class FileChangeResponse(BaseModel):
     total_monitored: int
 
 
+class FileDetailResponse(BaseModel):
+    """Response model for file details."""
+    file_id: str
+    filename: str
+    file_type: str
+    size_mb: float
+    status: str
+    current_location: str
+    part_number: str = None
+    processing_history: List[Dict[str, Any]] = []
+    checksum: str
+
+
 @app.on_event("startup")
 async def startup_event():
     """Initialize file monitor on startup."""
@@ -133,6 +146,97 @@ async def get_processable_files():
 
     except Exception as e:
         logger.error(f"Processable files error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/files/{file_id}", response_model=FileDetailResponse)
+async def get_file_by_id(file_id: str):
+    """Get detailed file information by ID."""
+    try:
+        if not file_monitor:
+            raise HTTPException(status_code=503, detail="File monitor not initialized")
+
+        file_obj = file_monitor.get_file_by_id(file_id)
+        if not file_obj:
+            raise HTTPException(status_code=404, detail=f"File not found: {file_id}")
+
+        return FileDetailResponse(
+            file_id=file_obj.metadata.file_id,
+            filename=file_obj.metadata.filename,
+            file_type=file_obj.metadata.file_type.value,
+            size_mb=file_obj.metadata.size_mb,
+            status=file_obj.metadata.status.value,
+            current_location=str(file_obj.current_location) if file_obj.current_location else "",
+            part_number=file_obj.part_number,
+            processing_history=file_obj.processing_history,
+            checksum=file_obj.metadata.checksum_sha256
+        )
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Get file error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.put("/files/{file_id}/status")
+async def update_file_status(file_id: str, status: str, reason: str = None):
+    """Update file status."""
+    try:
+        if not file_monitor:
+            raise HTTPException(status_code=503, detail="File monitor not initialized")
+
+        from ..models.file_models import FileStatus
+
+        try:
+            status_enum = FileStatus(status)
+        except ValueError:
+            raise HTTPException(status_code=400, detail=f"Invalid status: {status}")
+
+        success = file_monitor.update_file_status(file_id, status_enum, reason)
+
+        if not success:
+            raise HTTPException(status_code=404, detail=f"File not found: {file_id}")
+
+        return {
+            "success": True,
+            "file_id": file_id,
+            "new_status": status,
+            "reason": reason,
+            "timestamp": datetime.now().isoformat()
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Status update error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.put("/files/{file_id}/part_number")
+async def update_file_part_number(file_id: str, part_number: str, confidence: float = 1.0):
+    """Update file part number."""
+    try:
+        if not file_monitor:
+            raise HTTPException(status_code=503, detail="File monitor not initialized")
+
+        success = file_monitor.add_file_part_number(file_id, part_number, confidence)
+
+        if not success:
+            raise HTTPException(status_code=404, detail=f"File not found: {file_id}")
+
+        return {
+            "success": True,
+            "file_id": file_id,
+            "part_number": part_number,
+            "confidence": confidence,
+            "timestamp": datetime.now().isoformat()
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Part number update error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
