@@ -6,11 +6,12 @@ Flask application with clean separation of concerns and manual override capabili
 
 import json
 import logging
+import os
 from datetime import datetime
 from pathlib import Path
 from typing import Dict, List, Optional
 
-from flask import Flask, render_template, request, jsonify, send_file, redirect, url_for
+from flask import Flask, render_template, request, jsonify, send_file, redirect, url_for, flash
 from werkzeug.utils import secure_filename
 
 from ..config.settings import settings
@@ -69,21 +70,20 @@ def create_app() -> Flask:
         """Main dashboard."""
         try:
             # Try to get current status, but handle if services aren't ready yet
-            try:
-                pending_files = file_monitor.get_files_by_status(FileStatus.AWAITING_REVIEW)
-                completed_files = file_monitor.get_files_by_status(FileStatus.APPROVED)
-            except Exception as e:
-                logger.warning(f"File monitor not ready: {e}")
-                # Return minimal dashboard if services aren't ready
+            if not file_monitor:
                 return render_template('dashboard.html',
                                        pending_files=[],
                                        completed_files=[],
                                        stats={'pending': 0, 'completed': 0, 'processing': 0, 'failed': 0},
-                                       server_url=f"http://{settings.web.host}:{settings.web.port}"
+                                       server_url=f"http://{settings.web.host}:{settings.web.port}",
+                                       upload_enabled=True
                                        )
+
             # Get current status
             pending_files = file_monitor.get_files_by_status(FileStatus.AWAITING_REVIEW)
             completed_files = file_monitor.get_files_by_status(FileStatus.APPROVED)
+            processing_files = file_monitor.get_files_by_status(FileStatus.PROCESSING)
+            failed_files = file_monitor.get_files_by_status(FileStatus.FAILED)
 
             # Add part mapping info to pending files
             pending_data = []
@@ -92,29 +92,32 @@ def create_app() -> Flask:
                     'file_id': f.metadata.file_id,
                     'filename': f.metadata.filename,
                     'size_mb': f.metadata.size_mb,
-                    'status': f.metadata.status,
-                    'created_at': f.metadata.created_at.isoformat(),
+                    'status': f.metadata.status.value,
+                    'created_at': f.metadata.created_at.strftime('%Y-%m-%d %H:%M'),
                     'preview_url': f'/api/preview/{f.metadata.file_id}',
                     'review_url': f'/review/{f.metadata.file_id}',
                     'edit_url': f'/edit/{f.metadata.file_id}'
                 }
 
                 # Add part mapping if available
-                if not f.part_number:
-                    mapping_result = part_mapper.map_filename_to_part_number(f.metadata.filename)
-                    if mapping_result.mapped_part_number:
-                        file_data['suggested_part'] = mapping_result.mapped_part_number
-                        file_data['mapping_confidence'] = mapping_result.confidence_score
-                        file_data['needs_review'] = mapping_result.requires_manual_review
+                if not f.part_number and part_mapper:
+                    try:
+                        mapping_result = part_mapper.map_filename_to_part_number(f.metadata.filename)
+                        if mapping_result.mapped_part_number:
+                            file_data['suggested_part'] = mapping_result.mapped_part_number
+                            file_data['mapping_confidence'] = mapping_result.confidence_score
+                            file_data['needs_review'] = mapping_result.requires_manual_review
+                    except Exception as e:
+                        logger.warning(f"Part mapping failed for {f.metadata.filename}: {e}")
 
                 pending_data.append(file_data)
 
-            # Simplified stats for initial testing
+            # Enhanced stats
             stats = {
                 'pending': len(pending_files) if pending_files else 0,
                 'completed': len(completed_files) if completed_files else 0,
-                'processing': 0,
-                'failed': 0
+                'processing': len(processing_files) if processing_files else 0,
+                'failed': len(failed_files) if failed_files else 0
             }
 
             completed_data = []
@@ -124,7 +127,7 @@ def create_app() -> Flask:
                         'file_id': f.metadata.file_id,
                         'filename': f.metadata.filename,
                         'size_mb': f.metadata.size_mb,
-                        'completed_at': f.metadata.created_at.isoformat()
+                        'completed_at': f.metadata.created_at.strftime('%Y-%m-%d %H:%M')
                     }
                     for f in completed_files[:10]
                 ]
@@ -133,7 +136,8 @@ def create_app() -> Flask:
                                    pending_files=pending_data,
                                    completed_files=completed_data,
                                    stats=stats,
-                                   server_url=f"http://{settings.web.host}:{settings.web.port}"
+                                   server_url=f"http://{settings.web.host}:{settings.web.port}",
+                                   upload_enabled=True
                                    )
         except Exception as e:
             logger.error(f"Dashboard error: {e}")
@@ -144,53 +148,97 @@ def create_app() -> Flask:
         """File upload interface."""
         if request.method == 'POST':
             if 'file' not in request.files:
-                return jsonify({'error': 'No file selected'}), 400
+                return jsonify({'success': False, 'error': 'No file selected'}), 400
 
             file = request.files['file']
             if file.filename == '':
-                return jsonify({'error': 'No file selected'}), 400
+                return jsonify({'success': False, 'error': 'No file selected'}), 400
 
             if file:
                 filename = secure_filename(file.filename)
-                upload_path = settings.processing.input_dir / filename
+
+                # Validate file type
+                allowed_extensions = {'.psd', '.png', '.jpg', '.jpeg', '.tiff', '.tif'}
+                file_ext = Path(filename).suffix.lower()
+
+                if file_ext not in allowed_extensions:
+                    return jsonify({
+                        'success': False,
+                        'error': f'Unsupported file type: {file_ext}. Allowed: {", ".join(allowed_extensions)}'
+                    }), 400
+
+                # Ensure input directory exists
+                input_dir = settings.processing.input_dir
+                input_dir.mkdir(parents=True, exist_ok=True)
+
+                upload_path = input_dir / filename
+
+                # Handle duplicate filenames
+                counter = 1
+                original_path = upload_path
+                while upload_path.exists():
+                    stem = original_path.stem
+                    suffix = original_path.suffix
+                    upload_path = original_path.parent / f"{stem}_{counter}{suffix}"
+                    counter += 1
 
                 try:
                     file.save(upload_path)
-                    logger.info(f"File uploaded: {filename}")
+                    logger.info(f"File uploaded: {upload_path.name}")
+
+                    # Try to trigger discovery if file monitor is available
+                    if file_monitor:
+                        try:
+                            # Give the file a moment to be fully written
+                            import time
+                            time.sleep(0.5)
+                            file_monitor.discover_new_files()
+                        except Exception as e:
+                            logger.warning(f"Failed to trigger file discovery: {e}")
+
                     return jsonify({
                         'success': True,
-                        'message': f'File {filename} uploaded successfully',
-                        'filename': filename
+                        'message': f'File {upload_path.name} uploaded successfully',
+                        'filename': upload_path.name
                     })
                 except Exception as e:
                     logger.error(f"Upload failed: {e}")
-                    return jsonify({'error': f'Upload failed: {str(e)}'}), 500
+                    return jsonify({'success': False, 'error': f'Upload failed: {str(e)}'}), 500
 
         return render_template('upload.html')
 
     @app.route('/review/<file_id>')
     def review_file(file_id: str):
         """File review interface."""
+        if not file_monitor:
+            return render_template('error.html', error='File monitor service not available'), 503
+
         file_obj = file_monitor.get_file_by_id(file_id)
         if not file_obj:
             return render_template('error.html', error='File not found'), 404
 
         # Get part mapping if not already done
         part_mapping = None
-        if not file_obj.part_number:
-            part_mapping = part_mapper.map_filename_to_part_number(file_obj.metadata.filename)
+        if not file_obj.part_number and part_mapper:
+            try:
+                part_mapping = part_mapper.map_filename_to_part_number(file_obj.metadata.filename)
+            except Exception as e:
+                logger.warning(f"Part mapping failed: {e}")
 
         # Get part metadata if we have a part number
         part_metadata = None
         part_number = file_obj.part_number or (part_mapping.mapped_part_number if part_mapping else None)
-        if part_number:
-            part_metadata = filemaker.get_part_metadata(part_number)
+        if part_number and filemaker:
+            try:
+                part_metadata = filemaker.get_part_metadata(part_number)
+            except Exception as e:
+                logger.warning(f"Failed to get part metadata: {e}")
 
         return render_template('review.html',
                                file={
                                    'file_id': file_obj.metadata.file_id,
                                    'filename': file_obj.metadata.filename,
-                                   'status': file_obj.metadata.status,
+                                   'status': file_obj.metadata.status.value,
                                    'size_mb': file_obj.metadata.size_mb,
                                    'dimensions': file_obj.dimensions.dict() if file_obj.dimensions else None,
                                    'part_number': part_number,
@@ -204,26 +252,35 @@ def create_app() -> Flask:
     @app.route('/edit/<file_id>')
     def edit_metadata(file_id: str):
         """Metadata editing interface."""
+        if not file_monitor:
+            return render_template('error.html', error='File monitor service not available'), 503
+
         file_obj = file_monitor.get_file_by_id(file_id)
         if not file_obj:
             return render_template('error.html', error='File not found'), 404
 
         # Get part mapping if not already done
         part_mapping = None
-        if not file_obj.part_number:
-            part_mapping = part_mapper.map_filename_to_part_number(file_obj.metadata.filename)
+        if not file_obj.part_number and part_mapper:
+            try:
+                part_mapping = part_mapper.map_filename_to_part_number(file_obj.metadata.filename)
+            except Exception as e:
+                logger.warning(f"Part mapping failed: {e}")
 
         # Get current metadata
         part_number = file_obj.part_number or (part_mapping.mapped_part_number if part_mapping else None)
         part_metadata = None
-        if part_number:
-            part_metadata = filemaker.get_part_metadata(part_number)
+        if part_number and filemaker:
+            try:
+                part_metadata = filemaker.get_part_metadata(part_number)
+            except Exception as e:
+                logger.warning(f"Failed to get part metadata: {e}")
 
         return render_template('edit_metadata.html',
                                file={
                                    'file_id': file_obj.metadata.file_id,
                                    'filename': file_obj.metadata.filename,
-                                   'status': file_obj.metadata.status,
+                                   'status': file_obj.metadata.status.value,
                                    'size_mb': file_obj.metadata.size_mb,
                                    'part_number': part_number,
                                    'part_mapping': part_mapping.dict() if part_mapping else None,
@@ -239,21 +296,33 @@ def create_app() -> Flask:
         return jsonify({
             'status': 'ok',
             'message': 'Flask app is running',
-            'timestamp': datetime.now().isoformat()
+            'timestamp': datetime.now().isoformat(),
+            'services': {
+                'file_monitor': file_monitor is not None,
+                'part_mapper': part_mapper is not None,
+                'filemaker': filemaker is not None,
+                'notifier': notifier is not None
+            }
         })
 
     @app.route('/api/status')
     def api_status():
         """API endpoint for system status."""
         try:
+            if not file_monitor:
+                return jsonify({
+                    'error': 'File monitor not available',
+                    'timestamp': datetime.now().isoformat()
+                }), 503
+
             stats = {
                 'pending': len(file_monitor.get_files_by_status(FileStatus.AWAITING_REVIEW)),
                 'processing': len(file_monitor.get_files_by_status(FileStatus.PROCESSING)),
                 'completed': len(file_monitor.get_files_by_status(FileStatus.APPROVED)),
                 'failed': len(file_monitor.get_files_by_status(FileStatus.FAILED)),
                 'total_tracked': len(file_monitor._tracked_files),
-                'database_connected': filemaker.test_connection(),
-                'part_mapper_ready': len(part_mapper.interchange_cache) > 0,
+                'database_connected': filemaker.test_connection() if filemaker else False,
+                'part_mapper_ready': len(part_mapper.interchange_cache) > 0 if part_mapper else False,
                 'timestamp': datetime.now().isoformat()
             }
 
@@ -273,12 +342,21 @@ def create_app() -> Flask:
             if len(query) < 2:
                 return jsonify({'suggestions': []})
 
+            if not part_mapper:
+                return jsonify({'suggestions': [], 'error': 'Part mapper not available'})
+
             suggestions = part_mapper.get_manual_override_suggestions(filename, query)
 
             # Get additional metadata for suggestions
             suggestion_data = []
             for part_number in suggestions[:10]:  # Limit to 10
-                metadata = filemaker.get_part_metadata(part_number)
+                metadata = None
+                if filemaker:
+                    try:
+                        metadata = filemaker.get_part_metadata(part_number)
+                    except Exception as e:
+                        logger.warning(f"Failed to get metadata for {part_number}: {e}")
+
                 suggestion_data.append({
                     'part_number': part_number,
                     'description': metadata.title if metadata else None,
@@ -296,6 +374,9 @@ def create_app() -> Flask:
     def api_update_metadata():
         """API endpoint to update file metadata with manual overrides."""
         try:
+            if not file_monitor:
+                return jsonify({'error': 'File monitor service not available'}), 503
+
             data = request.get_json()
             file_id = data.get('file_id')
 
@@ -308,7 +389,7 @@ def create_app() -> Flask:
 
             # Validate part number if provided
             part_number = data.get('part_number', '').strip()
-            if part_number and not part_mapper.validate_part_number(part_number):
+            if part_number and part_mapper and not part_mapper.validate_part_number(part_number):
                 return jsonify({'error': f'Part number {part_number} not found in database'}), 400
 
             # Create manual overrides for changed values
@@ -347,7 +428,6 @@ def create_app() -> Flask:
                 )
 
                 # Trigger format generation
-                # This would normally be handled by the n8n workflow
                 logger.info(f"File {file_id} approved after manual review")
 
             return jsonify({
@@ -364,6 +444,9 @@ def create_app() -> Flask:
     def api_approve_file(file_id: str):
         """API endpoint to approve a file for production."""
         try:
+            if not file_monitor:
+                return jsonify({'error': 'File monitor service not available'}), 503
+
             success = file_monitor.update_file_status(
                 file_id,
                 FileStatus.APPROVED,
@@ -386,6 +469,9 @@ def create_app() -> Flask:
     def api_reject_file(file_id: str):
         """API endpoint to reject a file."""
         try:
+            if not file_monitor:
+                return jsonify({'error': 'File monitor service not available'}), 503
+
             data = request.get_json() or {}
             reason = data.get('reason', 'Quality insufficient')
 
@@ -411,9 +497,15 @@ def create_app() -> Flask:
     def api_preview_image(file_id: str):
         """Serve preview image for a file."""
         try:
+            if not file_monitor:
+                return "File monitor not available", 503
+
             file_obj = file_monitor.get_file_by_id(file_id)
             if not file_obj or not file_obj.current_location:
                 return "Image not found", 404
+
+            if not file_obj.current_location.exists():
+                return "Image file not found on disk", 404
 
             return send_file(file_obj.current_location)
 
@@ -425,6 +517,9 @@ def create_app() -> Flask:
     def api_pending_decisions():
         """API endpoint for checking pending decisions (for n8n)."""
         try:
+            if not file_monitor:
+                return jsonify({'decisions': [], 'count': 0, 'error': 'File monitor not available'})
+
             # Check for files that were just approved/rejected
             decisions = []
 
@@ -435,7 +530,7 @@ def create_app() -> Flask:
                 if file_obj.processing_history:
                     last_step = file_obj.processing_history[-1]
                     if last_step.get('step') == 'status_change' and \
-                            last_step.get('details', {}).get('to') == FileStatus.APPROVED:
+                            last_step.get('details', {}).get('to') == FileStatus.APPROVED.value:
                         decisions.append({
                             'file_id': file_obj.metadata.file_id,
                             'action': 'approve',
@@ -452,12 +547,31 @@ def create_app() -> Flask:
             logger.error(f"Pending decisions API error: {e}")
             return jsonify({'decisions': [], 'count': 0, 'error': str(e)})
 
+    @app.route('/browse/production/')
+    def browse_production():
+        """Browse production files."""
+        try:
+            production_dir = settings.processing.production_dir
+            if not production_dir.exists():
+                return render_template('error.html', error='Production directory not found'), 404
+
+            # This would list production files - implementation depends on requirements
+            return jsonify({
+                'message': 'Production file browsing not yet implemented',
+                'production_dir': str(production_dir)
+            })
+
+        except Exception as e:
+            logger.error(f"Browse production error: {e}")
+            return render_template('error.html', error=str(e)), 500
+
     @app.errorhandler(404)
     def not_found(error):
         return render_template('error.html', error='Page not found'), 404
 
     @app.errorhandler(500)
     def internal_error(error):
+        logger.error(f"Internal server error: {error}")
         return render_template('error.html', error='Internal server error'), 500
 
     @app.errorhandler(Exception)

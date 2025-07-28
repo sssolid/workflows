@@ -1,28 +1,26 @@
 # ===== Makefile.dev =====
 # Development environment commands
 
-.PHONY: dev-help dev-setup dev-start dev-stop dev-logs dev-test dev-clean
+.PHONY: help dev-help dev-setup dev-start dev-stop dev-logs dev-test dev-clean \
+         dev-rebuild-web-server dev-rebuild-ml-processor dev-rebuild-file-monitor \
+         dev-rebuild-image-processor dev-rebuild-teams-notifier dev-rebuild-n8n-dev \
+         dev-rebuild-all dev-images dev-db dev-status
 
-dev-help:
-	@echo "Crown Automotive Image Processing - Development Commands"
-	@echo "======================================================"
-	@echo ""
-	@echo "Available commands:"
-	@echo "  dev-setup     - Setup development environment"
-	@echo "  dev-start     - Start development environment"
-	@echo "  dev-stop      - Stop development environment"
-	@echo "  dev-logs      - View development logs"
-	@echo "  dev-test      - Run development tests"
-	@echo "  dev-clean     - Clean development environment"
-	@echo "  dev-images    - Create sample test images"
-	@echo "  dev-db        - Show mock database contents"
+.DEFAULT_GOAL := help
 
-dev-setup:
+##@ Makefile.dev Help
+help:  ## Show this help.
+	@awk 'BEGIN {FS = ":.*?## "}; /^[a-zA-Z0-9_%-]+:.*?## .*$$/ { printf "  %-30s %s\n", $$1, $$2 }' $(MAKEFILE_LIST) | sort
+
+dev-help:  ## Show available development commands
+	@grep -E '^[a-zA-Z0-9_%-]+:.*?##' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; { printf "  %-30s %s\n", $$1, $$2 }'
+
+dev-setup: ## Setup development environment
 	@echo "🚀 Setting up development environment..."
 	chmod +x dev/setup_dev_environment.sh
 	./dev/setup_dev_environment.sh
 
-dev-start:
+dev-start: ## Start development environment
 	@echo "▶️ Starting development environment..."
 	cp .env.dev .env
 	docker-compose -f docker-compose.dev.yml up -d
@@ -31,35 +29,67 @@ dev-start:
 	@echo "n8n: http://localhost:5678 (admin/admin)"
 	@echo "Mock Teams: http://localhost:3000"
 
-dev-stop:
+dev-stop: ## Stop development environment
 	@echo "⏹️ Stopping development environment..."
 	docker-compose -f docker-compose.dev.yml down
 
-dev-logs:
+dev-logs: ## Tail container logs
 	docker-compose -f docker-compose.dev.yml logs -f
 
-dev-test:
+dev-test: ## Run development test
 	@echo "🧪 Running development tests..."
 	docker-compose -f docker-compose.dev.yml exec web_server python -m pytest tests/ -v
 
-dev-clean:
+dev-clean: ## Clean and prune environment
 	@echo "🧹 Cleaning development environment..."
 	docker-compose -f docker-compose.dev.yml down -v
 	docker system prune -f
 	rm -rf dev/test_data/*
 	@echo "✅ Development environment cleaned"
 
-dev-images:
+dev-rebuild-web-server: ## Rebuild web server
+	docker-compose -f docker-compose.dev.yml build web_server
+	docker-compose -f docker-compose.dev.yml up -d --no-deps --build web_server
+
+dev-rebuild-ml-processor: ## Rebuild ml processor
+	docker-compose -f docker-compose.dev.yml build ml_processor
+	docker-compose -f docker-compose.dev.yml up -d --no-deps --build ml_processor
+
+dev-rebuild-file-monitor: ## Rebuild file monitor
+	docker-compose -f docker-compose.dev.yml build file_monitor
+	docker-compose -f docker-compose.dev.yml up -d --no-deps --build file_monitor
+
+dev-rebuild-image-processor: ## Rebuild image processor
+	docker-compose -f docker-compose.dev.yml build image_processor
+	docker-compose -f docker-compose.dev.yml up -d --no-deps --build image_processor
+
+dev-rebuild-teams-notifier: ## Rebuild teams notifier
+	docker-compose -f docker-compose.dev.yml build teams_notifier
+	docker-compose -f docker-compose.dev.yml up -d --no-deps --build teams_notifier
+
+dev-rebuild-mock-teams: ## Rebuild mock teams
+	docker-compose -f docker-compose.dev.yml build mock_teams
+	docker-compose -f docker-compose.dev.yml up -d --no-deps --build mock_teams
+
+dev-rebuild-n8n-dev: ## Rebuild n8n dev
+	docker-compose -f docker-compose.dev.yml build n8n_dev
+	docker-compose -f docker-compose.dev.yml up -d --no-deps --build n8n_dev
+
+dev-rebuild-all: ## Rebuild all
+	docker-compose -f docker-compose.dev.yml build web_server ml_processor file_monitor image_processor teams_notifier mock_teams n8n_dev
+	docker-compose -f docker-compose.dev.yml up -d --no-deps --build web_server ml_processor file_monitor image_processor teams_notifier mock_teams n8n_dev
+
+dev-images: ## Create sample test images
 	@echo "🖼️ Creating sample test images..."
 	python3 dev/create_sample_images.py
 
-dev-db:
+dev-db: ## Mock database contents
 	@echo "📊 Mock database contents:"
 	docker-compose -f docker-compose.dev.yml exec mock_database sqlite3 /app/data/mock_crown.db ".tables"
 	docker-compose -f docker-compose.dev.yml exec mock_database sqlite3 /app/data/mock_crown.db "SELECT COUNT(*) as 'Total Parts' FROM Master;"
 	docker-compose -f docker-compose.dev.yml exec mock_database sqlite3 /app/data/mock_crown.db "SELECT COUNT(*) as 'Interchange Records' FROM as400_ininter;"
 
-dev-status:
+dev-status: ## Development environment status
 	@echo "📊 Development Environment Status:"
 	docker-compose -f docker-compose.dev.yml ps
 	@echo ""

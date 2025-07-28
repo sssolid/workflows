@@ -1,7 +1,8 @@
 # ===== src/config/settings.py =====
+import os
 from pathlib import Path
 from typing import List, Optional
-from pydantic_settings import BaseSettings
+from pydantic_settings import BaseSettings, SettingsConfigDict
 from pydantic import Field
 
 
@@ -14,8 +15,13 @@ class DatabaseSettings(BaseSettings):
     filemaker_username: Optional[str] = None
     filemaker_password: Optional[str] = None
 
-    class Config:
-        env_prefix = "FILEMAKER_"
+    model_config = SettingsConfigDict(
+        env_file=".env",
+        env_prefix="FILEMAKER_",
+        env_file_encoding="utf-8",
+        case_sensitive=True,
+        extra="ignore",
+    )
 
 
 class ProcessingSettings(BaseSettings):
@@ -35,8 +41,13 @@ class ProcessingSettings(BaseSettings):
     scan_interval_seconds: int = Field(default=30)
     processing_timeout_seconds: int = Field(default=300)
 
-    class Config:
-        env_prefix = "PROCESSING_"
+    model_config = SettingsConfigDict(
+        env_file=".env",
+        env_prefix="PROCESSING_",
+        env_file_encoding="utf-8",
+        case_sensitive=True,
+        extra="ignore",
+    )
 
 
 class WebSettings(BaseSettings):
@@ -46,8 +57,13 @@ class WebSettings(BaseSettings):
     debug: bool = Field(default=False)
     secret_key: str = Field(default="change-me-in-production")
 
-    class Config:
-        env_prefix = "WEB_"
+    model_config = SettingsConfigDict(
+        env_file=".env",
+        env_prefix="WEB_",
+        env_file_encoding="utf-8",
+        case_sensitive=True,
+        extra="ignore",
+    )
 
 
 class NotificationSettings(BaseSettings):
@@ -57,23 +73,32 @@ class NotificationSettings(BaseSettings):
     smtp_server: Optional[str] = None
     smtp_port: int = Field(default=587)
 
-    class Config:
-        env_prefix = "NOTIFICATION_"
+    model_config = SettingsConfigDict(
+        env_file=".env",
+        env_prefix="NOTIFICATION_",
+        env_file_encoding="utf-8",
+        case_sensitive=True,
+        extra="ignore",
+    )
 
 
 class Settings(BaseSettings):
     """Main application settings."""
     environment: str = Field(default="development")
     log_level: str = Field(default="INFO")
+    tz: str = Field(default="America/New_York")
 
     database: DatabaseSettings = Field(default_factory=DatabaseSettings)
     processing: ProcessingSettings = Field(default_factory=ProcessingSettings)
     web: WebSettings = Field(default_factory=WebSettings)
     notifications: NotificationSettings = Field(default_factory=NotificationSettings)
 
-    class Config:
-        env_file = ".env"
-        env_file_encoding = "utf-8"
+    model_config = SettingsConfigDict(
+        env_file=".env",
+        env_file_encoding="utf-8",
+        case_sensitive=True,
+        extra="ignore",
+    )
 
 
 # Global settings instance

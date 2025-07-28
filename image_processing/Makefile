@@ -3,81 +3,90 @@
 
 .PHONY: help setup build start stop logs test clean lint format docs
 
-# Default target
-help:
-	@echo "Crown Automotive Image Processing System"
-	@echo "========================================"
-	@echo ""
-	@echo "Available commands:"
-	@echo "  setup     - Initial system setup"
-	@echo "  build     - Build Docker images"
-	@echo "  start     - Start all services"
-	@echo "  stop      - Stop all services"
-	@echo "  restart   - Restart all services"
-	@echo "  logs      - View logs"
-	@echo "  test      - Run tests"
-	@echo "  lint      - Run code linting"
-	@echo "  format    - Format code"
-	@echo "  clean     - Clean up system"
-	@echo "  status    - Show system status"
+.DEFAULT_GOAL := help
 
-# Initial setup
-setup:
+##@ Makefile.dev Help
+help:  ## Show this help.
+	@awk 'BEGIN {FS = ":.*?## "}; /^[a-zA-Z0-9_%-]+:.*?## .*$$/ { printf "  %-30s %s\n", $$1, $$2 }' $(MAKEFILE_LIST) | sort
+
+prod-help:  ## Show available production commands
+	@grep -E '^[a-zA-Z0-9_%-]+:.*?##' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; { printf "  %-30s %s\n", $$1, $$2 }'
+
+setup: ## Initial setup
 	@echo "🚀 Setting up Crown Automotive Image Processing System..."
 	chmod +x setup.sh
 	./setup.sh
 
-# Build Docker images
-build:
+build: ## Build Docker images
 	@echo "🔨 Building Docker images..."
 	docker-compose build
 
-# Start services
-start:
+start: ## Start services
 	@echo "▶️ Starting all services..."
 	docker-compose up -d
 	@echo "✅ Services started successfully"
 	@echo "Dashboard: http://localhost:8080"
 	@echo "n8n: http://localhost:5678"
 
-# Stop services
-stop:
+stop: ## Stop services
 	@echo "⏹️ Stopping all services..."
 	docker-compose down
 
-# Restart services
-restart: stop start
+restart: ## Restart services
+	stop start
 
-# View logs
-logs:
+logs: ## View logs
 	docker-compose logs -f
 
-# Run tests
-test:
+test: ## Run tests
 	@echo "🧪 Running tests..."
 	docker-compose exec web_server python -m pytest tests/ -v --cov=src
 
-# Lint code
-lint:
+lint: ## Lint code
 	@echo "🔍 Running code linting..."
 	docker-compose exec web_server flake8 src/ tests/
 	docker-compose exec web_server mypy src/
 
-# Format code
-format:
+format: ## Format code
 	@echo "🎨 Formatting code..."
 	docker-compose exec web_server black src/ tests/
 	docker-compose exec web_server isort src/ tests/
 
-# Clean system
-clean:
+clean: ## Clean system
 	@echo "🧹 Cleaning up system..."
 	docker-compose down -v
 	docker system prune -f
 	@echo "✅ System cleaned"
 
-# Show system status
-status:
+rebuild-web-server: ## Rebuild web server
+	docker-compose build web_server
+	docker-compose up -d --no-deps --build web_server
+
+rebuild-ml-processor: ## Rebuild ml processor
+	docker-compose build ml_processor
+	docker-compose up -d --no-deps --build ml_processor
+
+rebuild-file-monitor: ## Rebuild file monitor
+	docker-compose build file_monitor
+	docker-compose up -d --no-deps --build file_monitor
+
+rebuild-image-processor: ## Rebuild image processor
+	docker-compose build image_processor
+	docker-compose up -d --no-deps --build image_processor
+
+rebuild-teams-notifier: ## Rebuild teams notifier
+	docker-compose build teams_notifier
+	docker-compose up -d --no-deps --build teams_notifier
+
+rebuild-n8n: ## Rebuild n8n
+	docker-compose build n8n
+	docker-compose up -d --no-deps --build n8n
+
+rebuild-all: ## Rebuild all
+	docker-compose build web_server ml_processor file_monitor image_processor teams_notifier n8n
+	docker-compose up -d --no-deps --build web_server ml_processor file_monitor image_processor teams_notifier n8n
+
+status: ## Show system status
 	@echo "📊 System Status:"
 	docker-compose ps
 	@echo ""
@@ -86,32 +95,19 @@ status:
 	@curl -s http://localhost:8001/health | python -m json.tool || echo "ML processor not responding"
 	@curl -s http://localhost:8002/health | python -m json.tool || echo "File monitor not responding"
 
-# Quick development commands
-dev-logs:
-	docker-compose logs -f web_server ml_processor
-
-dev-restart-web:
-	docker-compose restart web_server
-
-dev-restart-ml:
-	docker-compose restart ml_processor
-
-# Database commands
-db-test:
+db-test: ## Test database
 	docker-compose exec image_processor python -c "from src.services.filemaker_service import FileMakerService; fm = FileMakerService(); print('✅ Database OK' if fm.test_connection() else '❌ Database Failed')"
 
-# File system commands
-scan:
+scan: ## Scan file system
 	docker-compose exec web_server python -m src.cli scan
 
-process:
+process: ## Process files
 	docker-compose exec web_server python -m src.cli process $(FILE_ID) --background-removal
 
-reset:
+reset: ## Reset status
 	docker-compose exec web_server python -m src.cli reset --confirm
 
-# Production deployment
-deploy-prod:
+deploy-prod: ## Production deployment
 	@echo "🚀 Deploying to production..."
 	@echo "⚠️ Make sure to update .env with production values!"
 	docker-compose -f docker-compose.yml up -d --build

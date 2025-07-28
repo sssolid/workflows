@@ -46,7 +46,7 @@ class FileMonitorService:
                     try:
                         # Handle both old and new file data formats
                         if 'metadata' in file_data:
-                            processed_file = ProcessedFile.parse_obj(file_data)
+                            processed_file = ProcessedFile.model_validate(file_data)
                         else:
                             # Legacy format conversion
                             metadata = FileMetadata(**file_data)

@@ -430,13 +430,13 @@
 
         suggestionTimeout = setTimeout(() => {
             fetch(`/api/part-suggestions?q=${encodeURIComponent(query)}`)
-                    .then(response => response.json())
-                    .then(data => {
-                        showSuggestions(data.suggestions || []);
-                    })
-                    .catch(error => {
-                        console.error('Error fetching suggestions:', error);
-                    });
+                .then(response => response.json())
+                .then(data => {
+                    showSuggestions(data.suggestions || []);
+                })
+                .catch(error => {
+                    console.error('Error fetching suggestions:', error);
+                });
         }, 300);
     });
 
@@ -451,96 +451,93 @@
             const item = document.createElement('div');
             item.className = 'suggestion-item';
             item.innerHTML = `
-                    <strong>${suggestion.part_number}</strong>
-                    ${suggestion.description ? `<br><small>${suggestion.description}</small>`
-        :
-            ''
-        }
-                `;
-                item.addEventListener('click', () => {
-                    partNumberInput.value = suggestion.part_number;
-                    suggestionsDiv.style.display = 'none';
-
-                    // Auto-fill metadata if available
-                    if (suggestion.description) {
-                        document.querySelector('input[name="title"]').value = suggestion.description;
-                    }
-                    if (suggestion.keywords) {
-                        document.querySelector('input[name="keywords"]').value = suggestion.keywords;
-                    }
-                });
-                suggestionsDiv.appendChild(item);
-            });
-
-            suggestionsDiv.style.display = 'block';
-        }
-
-        // Hide suggestions when clicking outside
-        document.addEventListener('click', function(event) {
-            if (!partNumberInput.contains(event.target) && !suggestionsDiv.contains(event.target)) {
+                <strong>${suggestion.part_number}</strong>
+                ${suggestion.description ? `<br><small>${suggestion.description}</small>` : ''}
+            `;
+            item.addEventListener('click', () => {
+                partNumberInput.value = suggestion.part_number;
                 suggestionsDiv.style.display = 'none';
-            }
+
+                // Auto-fill metadata if available
+                if (suggestion.description) {
+                    document.querySelector('input[name="title"]').value = suggestion.description;
+                }
+                if (suggestion.keywords) {
+                    document.querySelector('input[name="keywords"]').value = suggestion.keywords;
+                }
+            });
+            suggestionsDiv.appendChild(item);
         });
 
-        function collectFormData() {
-            const formData = new FormData(document.getElementById('metadataForm'));
-            const data = {};
+        suggestionsDiv.style.display = 'block';
+    }
 
-            for (let [key, value] of formData.entries()) {
-                data[key] = value.trim();
+    // Hide suggestions when clicking outside
+    document.addEventListener('click', function(event) {
+        if (!partNumberInput.contains(event.target) && !suggestionsDiv.contains(event.target)) {
+            suggestionsDiv.style.display = 'none';
+        }
+    });
+
+    function collectFormData() {
+        const formData = new FormData(document.getElementById('metadataForm'));
+        const data = {};
+
+        for (let [key, value] of formData.entries()) {
+            data[key] = value.trim();
+        }
+
+        return data;
+    }
+
+    function saveChanges() {
+        const data = collectFormData();
+
+        fetch('/api/update-metadata', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(data)
+        })
+        .then(response => response.json())
+        .then(result => {
+            if (result.success) {
+                alert('✅ Metadata updated successfully!');
+                window.location.href = `/review/${data.file_id}`;
+            } else {
+                alert('❌ Error: ' + (result.error || 'Unknown error'));
             }
+        })
+        .catch(error => {
+            alert('❌ Network error: ' + error.message);
+        });
+    }
 
-            return data;
-        }
+    function saveAndApprove() {
+        const data = collectFormData();
+        data.approve_after_save = true;
 
-        function saveChanges() {
-            const data = collectFormData();
-
-            fetch('/api/update-metadata', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify(data)
-            })
-            .then(response => response.json())
-            .then(result => {
-                if (result.success) {
-                    alert('✅ Metadata updated successfully!');
-                    window.location.href = ` / review / ${data.file_id}`;
-                } else {
-                    alert('❌ Error: ' + (result.error || 'Unknown error'));
-                }
-            })
-            .catch(error => {
-                alert('❌ Network error: ' + error.message);
-            });
-        }
-
-        function saveAndApprove() {
-            const data = collectFormData();
-            data.approve_after_save = true;
-
-            fetch('/api/update-metadata', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify(data)
-            })
-            .then(response => response.json())
-            .then(result => {
-                if (result.success) {
-                    alert('✅ Metadata updated and file approved!');
-                    window.location.href = '/';
-                } else {
-                    alert('❌ Error: ' + (result.error || 'Unknown error'));
-                }
-            })
-            .catch(error => {
-                alert('❌ Network error: ' + error.message);
-            });
-        }
-    </script>
+        fetch('/api/update-metadata', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(data)
+        })
+        .then(response => response.json())
+        .then(result => {
+            if (result.success) {
+                alert('✅ Metadata updated and file approved!');
+                window.location.href = '/';
+            } else {
+                alert('❌ Error: ' + (result.error || 'Unknown error'));
+            }
+        })
+        .catch(error => {
+            alert('❌ Network error: ' + error.message);
+        });
+    }
+</script>
 </body>
 </html>

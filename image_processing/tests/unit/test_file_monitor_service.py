@@ -4,8 +4,8 @@ from unittest.mock import Mock, patch, MagicMock
 from pathlib import Path
 from datetime import datetime
 
-from src.services.file_monitor_service import FileMonitorService
-from src.models.file_models import FileStatus, FileType
+from ...src.services.file_monitor_service import FileMonitorService
+from ...src.models.file_models import FileStatus, FileType
 
 
 class TestFileMonitorService:

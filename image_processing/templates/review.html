@@ -363,7 +363,7 @@
             <div>
                 {% if file.part_mapping.mapped_part_number %}
                 Mapped to: <strong>{{ file.part_mapping.mapped_part_number }}</strong>
-                <span class="confidence-badge confidence-{{ 'high' if file.part_mapping.confidence_score > 0.8 else 'medium' if file.part_mapping.confidence_score > 0.5 else 'low' }}">
+                <span class="confidence-badge confidence-{{ 'high' if file.part_mapping.confidence_score > 0.8 else ('medium' if file.part_mapping.confidence_score > 0.5 else 'low') }}">
                         {{ (file.part_mapping.confidence_score * 100)|round|int }}% confidence
                     </span>
                 {% endif %}
@@ -462,18 +462,18 @@
     function quickApprove() {
         if (confirm('✅ Approve this file for production processing?\n\nThis will generate all production formats automatically.')) {
             fetch(`/api/approve/{{ file.file_id }}`, {method: 'POST'})
-                    .then(response => response.json())
-                    .then(data => {
-                        if (data.success) {
-                            alert('✅ File approved for processing!');
-                            window.location.href = '/';
-                        } else {
-                            alert('❌ Error: ' + (data.error || 'Unknown error'));
-                        }
-                    })
-                    .catch(error => {
-                        alert('❌ Network error: ' + error.message);
-                    });
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        alert('✅ File approved for processing!');
+                        window.location.href = '/';
+                    } else {
+                        alert('❌ Error: ' + (data.error || 'Unknown error'));
+                    }
+                })
+                .catch(error => {
+                    alert('❌ Network error: ' + error.message);
+                });
         }
     }
 
@@ -485,18 +485,18 @@
                 headers: {'Content-Type': 'application/json'},
                 body: JSON.stringify({reason: reason.trim()})
             })
-                    .then(response => response.json())
-                    .then(data => {
-                        if (data.success) {
-                            alert('❌ File rejected');
-                            window.location.href = '/';
-                        } else {
-                            alert('❌ Error: ' + (data.error || 'Unknown error'));
-                        }
-                    })
-                    .catch(error => {
-                        alert('❌ Network error: ' + error.message);
-                    });
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        alert('❌ File rejected');
+                        window.location.href = '/';
+                    } else {
+                        alert('❌ Error: ' + (data.error || 'Unknown error'));
+                    }
+                })
+                .catch(error => {
+                    alert('❌ Network error: ' + error.message);
+                });
         }
     }
 
@@ -504,31 +504,27 @@
         if (confirm('🔄 Retry background removal processing?\n\nThis will re-process the image with the ML model.')) {
             // This would trigger reprocessing through the workflow
             fetch(`/api/retry/{{ file.file_id }}`, {method: 'POST'})
-                    .then(response => response.json())
-                    .then(data => {
-                        if (data.success) {
-                            alert('🔄 Reprocessing started');
-                            window.location.reload();
-                        } else {
-                            alert('❌ Error: ' + (data.error || 'Unknown error'));
-                        }
-                    })
-                    .catch(error => {
-                        alert('❌ Network error: ' + error.message);
-                    });
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        alert('🔄 Reprocessing started');
+                        window.location.reload();
+                    } else {
+                        alert('❌ Error: ' + (data.error || 'Unknown error'));
+                    }
+                })
+                .catch(error => {
+                    alert('❌ Network error: ' + error.message);
+                });
         }
     }
 
     // Auto-refresh if status is processing
-    {%
-        if file.status == 'processing' %
-    }
+    {% if file.status == 'processing' %}
     setTimeout(() => {
         window.location.reload();
     }, 10000); // Refresh every 10 seconds
-    {%
-        endif %
-    }
+    {% endif %}
 </script>
 </body>
 </html>

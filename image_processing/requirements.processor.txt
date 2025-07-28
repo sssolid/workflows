@@ -1,5 +1,10 @@
 # ===== requirements.processor.txt =====
 # Image Processor Requirements - Ubuntu/Debian compatible
+
+# Data models and validation
+pydantic>=2.4.0
+pydantic-settings>=2.0.0
+
 # Image processing
 Pillow>=10.0.0
 opencv-python-headless>=4.8.0
@@ -18,17 +23,20 @@ jaydebeapi>=1.2.3
 exifread>=3.0.0
 piexif>=1.1.3
 
+# Configuration
+python-dotenv>=1.0.0
+
 # Web framework
 fastapi>=0.104.0
 uvicorn>=0.24.0
 python-multipart>=0.0.6
 
-# Utilities
-pydantic>=2.4.0
-pydantic-settings>=2.0.0
+# Logging
 structlog>=23.1.0
 python-dateutil>=2.8.0
 
 # HTTP client
 httpx>=0.24.0
 requests>=2.31.0
+
+jinja2>=3.1.0

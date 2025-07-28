@@ -1,6 +1,5 @@
 # ===== docker-compose.dev.yml =====
 # Development environment for local testing without external dependencies
-version: '3.8'
 
 services:
   # Mock FileMaker Database using SQLite

@@ -2,8 +2,8 @@
 import pytest
 from unittest.mock import Mock, patch, MagicMock
 
-from src.services.part_mapping_service import PartMappingService
-from src.models.part_mapping_models import InterchangeMapping, PartMappingResult
+from ...src.services.part_mapping_service import PartMappingService
+from ...src.models.part_mapping_models import InterchangeMapping, PartMappingResult
 
 
 class TestPartMappingService:

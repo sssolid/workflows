@@ -1,5 +1,5 @@
 # ===== requirements.txt =====
-# Crown Automotive Image Processing System - Complete Working Requirements
+# Crown Automotive Image Processing System - Main Requirements
 
 # Web Framework
 flask>=2.3.0
@@ -37,13 +37,13 @@ click>=8.1.0
 pytest>=7.4.0
 pytest-cov>=4.1.0
 
-# ML Processing (for when ML container is added)
+# Database (commented out for basic deployment)
+# pyodbc>=4.0.39
+# jpype1>=1.4.0
+# jaydebeapi>=1.2.3
+
+# ML Processing (for when ML container is enabled)
 # torch>=2.0.0
 # torchvision>=0.15.0
 # rembg>=2.0.50
 # opencv-python-headless>=4.8.0
-
-# Database (commented out for dev)
-# pyodbc>=4.0.39
-# jpype1>=1.4.0
-# jaydebeapi>=1.2.3

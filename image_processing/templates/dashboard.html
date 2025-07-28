@@ -8,6 +8,15 @@
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
 
+        :root {
+            --processing-color: #ffc107;
+            --pending-color: #17a2b8;
+            --completed-color: #28a745;
+            --failed-color: #dc3545;
+            --primary-blue: #007acc;
+            --primary-blue-dark: #0056b3;
+        }
+
         body {
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
             background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
@@ -31,6 +40,10 @@
         .header p {
             font-size: 1.1em;
             opacity: 0.9;
+        }
+
+        .header-actions {
+            margin-top: 20px;
         }
 
         .stats {
@@ -61,8 +74,12 @@
             left: 0;
             right: 0;
             height: 4px;
-            background: var(--card-color, #007acc);
         }
+
+        .stat-card.processing::before { background: var(--processing-color); }
+        .stat-card.pending::before { background: var(--pending-color); }
+        .stat-card.completed::before { background: var(--completed-color); }
+        .stat-card.failed::before { background: var(--failed-color); }
 
         .stat-card:hover {
             transform: translateY(-5px);
@@ -73,8 +90,12 @@
             font-size: 3em;
             font-weight: bold;
             margin: 15px 0;
-            color: var(--card-color, #007acc);
         }
+
+        .stat-card.processing .stat-number { color: var(--processing-color); }
+        .stat-card.pending .stat-number { color: var(--pending-color); }
+        .stat-card.completed .stat-number { color: var(--completed-color); }
+        .stat-card.failed .stat-number { color: var(--failed-color); }
 
         .stat-label {
             color: #666;
@@ -83,11 +104,6 @@
             letter-spacing: 1px;
             font-weight: 500;
         }
-
-        .processing { --card-color: #ffc107; }
-        .pending { --card-color: #17a2b8; }
-        .completed { --card-color: #28a745; }
-        .failed { --card-color: #dc3545; }
 
         .section {
             margin: 20px;
@@ -103,6 +119,9 @@
             padding: 20px 25px;
             font-weight: 600;
             font-size: 1.1em;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
         }
 
         .file-list { padding: 0; }
@@ -164,9 +183,11 @@
             box-shadow: 0 4px 8px rgba(0,0,0,0.2);
         }
 
-        .btn-review { background: #007acc; color: white; }
-        .btn-approve { background: #28a745; color: white; }
+        .btn-primary { background: var(--primary-blue); color: white; }
+        .btn-review { background: var(--primary-blue); color: white; }
+        .btn-approve { background: var(--completed-color); color: white; }
         .btn-download { background: #6c757d; color: white; }
+        .btn-upload { background: var(--processing-color); color: white; }
 
         .empty-state {
             text-align: center;
@@ -178,7 +199,7 @@
             position: fixed;
             bottom: 30px;
             right: 30px;
-            background: linear-gradient(135deg, #007acc, #0056b3);
+            background: linear-gradient(135deg, var(--primary-blue), var(--primary-blue-dark));
             color: white;
             border: none;
             border-radius: 50%;
@@ -224,12 +245,23 @@
 
         .tag-pending { background: #fff3e0; color: #f57c00; }
         .tag-completed { background: #e8f5e8; color: #2e7d32; }
+        .tag-processing { background: #fff8e1; color: #f57c00; }
+        .tag-failed { background: #ffebee; color: #c62828; }
+
+        .quick-actions {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
     </style>
 </head>
 <body>
     <div class="header">
         <h1>🖼️ Crown Automotive Image Processing</h1>
         <p>Clean Architecture - Modern Image Processing Pipeline</p>
+        <div class="header-actions">
+            <a href="/upload" class="btn btn-upload">📤 Upload Images</a>
+        </div>
     </div>
 
     <div class="stats">
@@ -256,7 +288,10 @@
 
     <div class="section">
         <div class="section-header">
-            📋 Files Awaiting Review
+            <span>📋 Files Awaiting Review</span>
+            <div class="quick-actions">
+                <a href="/upload" class="btn btn-upload">📤 Upload</a>
+            </div>
         </div>
         <div class="file-list">
             {% if pending_files %}
@@ -268,10 +303,14 @@
                             <span class="tag tag-pending">{{ file.status.replace('_', ' ').title() }}</span>
                             <span>{{ file.size_mb }} MB</span>
                             <span>{{ file.created_at }}</span>
+                            {% if file.suggested_part %}
+                            <span>Part: {{ file.suggested_part }} ({{ (file.mapping_confidence * 100)|round|int }}%)</span>
+                            {% endif %}
                         </div>
                     </div>
                     <div class="file-actions">
                         <a href="{{ file.review_url }}" class="btn btn-review">🔍 Review</a>
+                        <a href="{{ file.edit_url }}" class="btn btn-primary">✏️ Edit</a>
                         <button class="btn btn-approve" onclick="quickApprove('{{ file.file_id }}')">✅ Quick Approve</button>
                     </div>
                 </div>
@@ -280,6 +319,7 @@
                 <div class="empty-state">
                     <h3>No files pending review</h3>
                     <p>All processed images have been reviewed</p>
+                    <a href="/upload" class="btn btn-upload" style="margin-top: 20px;">📤 Upload New Images</a>
                 </div>
             {% endif %}
         </div>
@@ -287,7 +327,10 @@
 
     <div class="section">
         <div class="section-header">
-            ✅ Recently Completed
+            <span>✅ Recently Completed</span>
+            <div class="quick-actions">
+                <a href="/browse/production/" class="btn btn-download">📁 Browse All</a>
+            </div>
         </div>
         <div class="file-list">
             {% if completed_files %}
@@ -361,6 +404,11 @@
             if (e.key === 'F5' || (e.ctrlKey && e.key === 'r')) {
                 e.preventDefault();
                 refreshData();
+            }
+            // Upload shortcut
+            if (e.ctrlKey && e.key === 'u') {
+                e.preventDefault();
+                window.location.href = '/upload';
             }
         });
     </script>

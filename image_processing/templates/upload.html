@@ -24,6 +24,16 @@
             margin-bottom: 40px;
         }
 
+        .header h1 {
+            color: #2c3e50;
+            margin-bottom: 10px;
+        }
+
+        .header p {
+            color: #666;
+            margin-bottom: 20px;
+        }
+
         .upload-area {
             background: white;
             border: 2px dashed #007acc;
@@ -79,6 +89,14 @@
             transform: translateY(-1px);
         }
 
+        .btn-secondary {
+            background: #6c757d;
+        }
+
+        .btn-secondary:hover {
+            background: #545b62;
+        }
+
         .file-input {
             display: none;
         }
@@ -99,7 +117,7 @@
         .progress-fill {
             height: 100%;
             background: #007acc;
-            width: 0%;
+            width: 0;
             transition: width 0.3s ease;
         }
 
@@ -121,6 +139,79 @@
             color: #721c24;
             border: 1px solid #f5c6cb;
         }
+
+        .file-preview {
+            margin-top: 30px;
+            background: white;
+            border-radius: 8px;
+            padding: 20px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            display: none;
+        }
+
+        .preview-item {
+            display: flex;
+            align-items: center;
+            padding: 10px;
+            border-bottom: 1px solid #eee;
+        }
+
+        .preview-item:last-child {
+            border-bottom: none;
+        }
+
+        .preview-icon {
+            width: 40px;
+            height: 40px;
+            background: #f8f9fa;
+            border-radius: 4px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin-right: 15px;
+            font-size: 1.2em;
+        }
+
+        .preview-info {
+            flex: 1;
+        }
+
+        .preview-name {
+            font-weight: 500;
+            margin-bottom: 5px;
+        }
+
+        .preview-size {
+            color: #666;
+            font-size: 0.9em;
+        }
+
+        .preview-status {
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 0.8em;
+            font-weight: 500;
+        }
+
+        .status-pending {
+            background: #fff3cd;
+            color: #856404;
+        }
+
+        .status-uploading {
+            background: #cce5ff;
+            color: #004085;
+        }
+
+        .status-success {
+            background: #d4edda;
+            color: #155724;
+        }
+
+        .status-error {
+            background: #f8d7da;
+            color: #721c24;
+        }
     </style>
 </head>
 <body>
@@ -128,13 +219,13 @@
     <div class="header">
         <h1>📤 Upload Images</h1>
         <p>Upload your images for processing</p>
-        <a href="/" class="btn">🏠 Back to Dashboard</a>
+        <a href="/" class="btn btn-secondary">🏠 Back to Dashboard</a>
     </div>
 
     <div class="upload-area" id="uploadArea">
         <div class="upload-icon">📁</div>
         <div class="upload-text">Click to select files or drag and drop</div>
-        <div class="upload-subtext">Supports: PSD, PNG, JPG, TIFF (Max: 100MB)</div>
+        <div class="upload-subtext">Supports: PSD, PNG, JPG, TIFF (Max: 100MB per file)</div>
         <input type="file" id="fileInput" class="file-input" multiple accept=".psd,.png,.jpg,.jpeg,.tiff,.tif">
         <button class="btn" onclick="document.getElementById('fileInput').click()">
             Select Files
@@ -148,6 +239,11 @@
     </div>
 
     <div class="message" id="message"></div>
+
+    <div class="file-preview" id="filePreview">
+        <h3>Files to Upload</h3>
+        <div id="previewList"></div>
+    </div>
 </div>
 
 <script>
@@ -156,6 +252,10 @@
     const progress = document.getElementById('progress');
     const progressFill = document.getElementById('progressFill');
     const message = document.getElementById('message');
+    const filePreview = document.getElementById('filePreview');
+    const previewList = document.getElementById('previewList');
+
+    let selectedFiles = [];
 
     // Drag and drop handlers
     uploadArea.addEventListener('dragover', (e) => {
@@ -171,28 +271,116 @@
         e.preventDefault();
         uploadArea.classList.remove('dragover');
 
-        const files = e.dataTransfer.files;
+        const files = Array.from(e.dataTransfer.files);
         if (files.length > 0) {
-            uploadFiles(files);
+            handleFileSelection(files);
         }
     });
 
     // File input handler
     fileInput.addEventListener('change', (e) => {
-        const files = e.target.files;
+        const files = Array.from(e.target.files);
         if (files.length > 0) {
-            uploadFiles(files);
+            handleFileSelection(files);
         }
     });
 
-    function uploadFiles(files) {
+    function handleFileSelection(files) {
+        selectedFiles = files.filter(file => {
+            const validTypes = ['.psd', '.png', '.jpg', '.jpeg', '.tiff', '.tif'];
+            const extension = '.' + file.name.split('.').pop().toLowerCase();
+            const isValidType = validTypes.includes(extension);
+            const isValidSize = file.size <= 100 * 1024 * 1024; // 100MB
+
+            if (!isValidType) {
+                showMessage(`❌ ${file.name}: Unsupported file type`, 'error');
+                return false;
+            }
+            if (!isValidSize) {
+                showMessage(`❌ ${file.name}: File too large (max 100MB)`, 'error');
+                return false;
+            }
+            return true;
+        });
+
+        if (selectedFiles.length > 0) {
+            showFilePreview();
+        }
+    }
+
+    function showFilePreview() {
+        previewList.innerHTML = '';
+
+        selectedFiles.forEach((file, index) => {
+            const item = document.createElement('div');
+            item.className = 'preview-item';
+            item.innerHTML = `
+                <div class="preview-icon">${getFileIcon(file.name)}</div>
+                <div class="preview-info">
+                    <div class="preview-name">${file.name}</div>
+                    <div class="preview-size">${formatFileSize(file.size)}</div>
+                </div>
+                <div class="preview-status status-pending" id="status-${index}">Ready</div>
+            `;
+            previewList.appendChild(item);
+        });
+
+        filePreview.style.display = 'block';
+
+        // Add upload button
+        const uploadBtn = document.createElement('button');
+        uploadBtn.className = 'btn';
+        uploadBtn.style.marginTop = '20px';
+        uploadBtn.textContent = `📤 Upload ${selectedFiles.length} file(s)`;
+        uploadBtn.onclick = uploadFiles;
+
+        // Clear existing button
+        const existingBtn = filePreview.querySelector('.btn');
+        if (existingBtn) existingBtn.remove();
+
+        filePreview.appendChild(uploadBtn);
+    }
+
+    function getFileIcon(filename) {
+        const ext = filename.split('.').pop().toLowerCase();
+        switch (ext) {
+            case 'psd':
+                return '🎨';
+            case 'png':
+                return '🖼️';
+            case 'jpg':
+            case 'jpeg':
+                return '📷';
+            case 'tiff':
+            case 'tif':
+                return '📸';
+            default:
+                return '📄';
+        }
+    }
+
+    function formatFileSize(bytes) {
+        if (bytes === 0) return '0 Bytes';
+        const k = 1024;
+        const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+        const i = Math.floor(Math.log(bytes) / Math.log(k));
+        return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+    }
+
+    function uploadFiles() {
+        if (selectedFiles.length === 0) return;
+
         progress.style.display = 'block';
         message.style.display = 'none';
 
         let uploadedCount = 0;
-        const totalFiles = files.length;
+        const totalFiles = selectedFiles.length;
 
-        Array.from(files).forEach((file, index) => {
+        selectedFiles.forEach((file, index) => {
+            const statusElement = document.getElementById(`status-${index}`);
+            statusElement.textContent = 'Uploading...';
+            statusElement.className = 'preview-status status-uploading';
+
             const formData = new FormData();
             formData.append('file', file);
 
@@ -206,19 +394,39 @@
                         const progressPercent = (uploadedCount / totalFiles) * 100;
                         progressFill.style.width = progressPercent + '%';
 
+                        if (data.success) {
+                            statusElement.textContent = 'Success';
+                            statusElement.className = 'preview-status status-success';
+                        } else {
+                            statusElement.textContent = 'Failed';
+                            statusElement.className = 'preview-status status-error';
+                        }
+
                         if (uploadedCount === totalFiles) {
+                            const successCount = document.querySelectorAll('.status-success').length;
                             showMessage(
-                                    `✅ Successfully uploaded ${uploadedCount} file(s)`,
-                                    'success'
+                                    `✅ Successfully uploaded ${successCount} of ${totalFiles} file(s)`,
+                                    successCount === totalFiles ? 'success' : 'error'
                             );
 
-                            setTimeout(() => {
-                                window.location.href = '/';
-                            }, 2000);
+                            if (successCount > 0) {
+                                setTimeout(() => {
+                                    window.location.href = '/';
+                                }, 2000);
+                            }
                         }
                     })
                     .catch(error => {
-                        showMessage(`❌ Error uploading ${file.name}: ${error.message}`, 'error');
+                        uploadedCount++;
+                        const progressPercent = (uploadedCount / totalFiles) * 100;
+                        progressFill.style.width = progressPercent + '%';
+
+                        statusElement.textContent = 'Error';
+                        statusElement.className = 'preview-status status-error';
+
+                        if (uploadedCount === totalFiles) {
+                            showMessage(`❌ Upload completed with errors`, 'error');
+                        }
                     });
         });
     }
@@ -228,6 +436,13 @@
         message.className = `message ${type}`;
         message.style.display = 'block';
     }
+
+    // Keyboard shortcuts
+    document.addEventListener('keydown', function (e) {
+        if (e.key === 'Escape') {
+            window.location.href = '/';
+        }
+    });
 </script>
 </body>
 </html>

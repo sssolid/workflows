@@ -5,7 +5,7 @@ import tempfile
 from pathlib import Path
 from unittest.mock import patch
 
-from src.workflows.file_monitoring import FileMonitoringWorkflow
+from ...src.workflows.file_monitoring import FileMonitoringWorkflow
 
 
 class TestWorkflowIntegration:

@@ -1,7 +1,8 @@
 # ===== docker-compose.yml =====
+# Production Docker Compose Configuration
 
 services:
-  # n8n Workflow Engine (Alpine - lightweight)
+  # n8n Workflow Engine
   n8n:
     build:
       context: .
@@ -29,7 +30,8 @@ services:
       - TEAMS_NOTIFIER_URL=http://teams_notifier:8004
     volumes:
       - n8n_data:/home/node/.n8n
-      - ./src:/scripts  # Mount clean architecture source
+      - ./workflows:/scripts/workflows:ro
+      - ./src:/scripts:ro
       - ./config:/config:ro
       - ./data:/data
     networks:
@@ -40,8 +42,13 @@ services:
       - file_monitor
       - image_processor
       - teams_notifier
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:5678/healthz"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
 
-  # ML Processing Container (Ubuntu - for PyTorch/rembg)
+  # ML Processing Container
   ml_processor:
     build:
       context: .
@@ -53,24 +60,26 @@ services:
     env_file:
       - .env
     environment:
-      - CUDA_VISIBLE_DEVICES=""  # CPU-only processing
+      - CUDA_VISIBLE_DEVICES=""  # CPU-only for production reliability
       - OMP_NUM_THREADS=4
       - MKL_NUM_THREADS=4
+      - PYTHONPATH=/app
     volumes:
       - ./src:/app/src:ro
       - ./config:/config:ro
       - ./data:/data
       - ./assets:/assets:ro
-      - ml_models_cache:/root/.cache  # Cache for rembg models
+      - ml_models_cache:/root/.cache
     networks:
       - crown_network
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8001/health"]
       interval: 30s
       timeout: 10s
-      retries: 3
+      retries: 5
+      start_period: 60s
 
-  # Web Server & Dashboard (Alpine - lightweight)
+  # Web Server & Dashboard
   web_server:
     build:
       context: .
@@ -84,25 +93,24 @@ services:
     environment:
       - WEB_HOST=0.0.0.0
       - WEB_PORT=8080
+      - PYTHONPATH=/app
     volumes:
       - ./src:/app/src:ro
       - ./config:/config:ro
-      - ./templates:/templates:ro
+      - ./templates:/app/templates:ro
       - ./assets:/assets:ro
       - ./data:/data
     networks:
       - crown_network
     depends_on:
-      - ml_processor
       - file_monitor
-      - image_processor
     healthcheck:
-      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:8080/api/status"]
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:8080/test"]
       interval: 30s
       timeout: 10s
       retries: 3
 
-  # File Monitor (Alpine - lightweight)
+  # File Monitor
   file_monitor:
     build:
       context: .
@@ -113,10 +121,16 @@ services:
       - "8002:8002"
     env_file:
       - .env
+    environment:
+      - PYTHONPATH=/app
     volumes:
       - ./src:/app/src:ro
       - ./config:/config:ro
       - ./data:/data
+      # Network drive mounts - UPDATE THESE FOR PRODUCTION
+      - /path/to/network/image-dropzone:/data/input
+      - /path/to/network/processed-images:/data/production
+      - /path/to/network/manual-review:/data/rejected
     networks:
       - crown_network
     healthcheck:
@@ -125,7 +139,7 @@ services:
       timeout: 10s
       retries: 3
 
-  # Image Processor (Ubuntu - for FileMaker JDBC + complex image processing)
+  # Image Processor
   image_processor:
     build:
       context: .
@@ -138,7 +152,8 @@ services:
       - .env
     environment:
       - JAVA_HOME=/usr/lib/jvm/java-17-openjdk-amd64
-      - JVM_OPTS=-Xmx1g -Xms256m
+      - JVM_OPTS=-Xmx2g -Xms512m
+      - PYTHONPATH=/app
     volumes:
       - ./src:/app/src:ro
       - ./config:/config:ro
@@ -154,7 +169,7 @@ services:
       timeout: 10s
       retries: 3
 
-  # Teams Notifier (Alpine - lightweight)
+  # Teams Notifier
   teams_notifier:
     build:
       context: .
@@ -165,6 +180,8 @@ services:
       - "8004:8004"
     env_file:
       - .env
+    environment:
+      - PYTHONPATH=/app
     volumes:
       - ./src:/app/src:ro
       - ./config:/config:ro
@@ -188,4 +205,229 @@ volumes:
   n8n_data:
     driver: local
   ml_models_cache:
+    driver: local
+
+---
+
+# ===== docker-compose.dev.yml =====
+# Development Docker Compose Configuration
+version: '3.8'
+
+services:
+  # Mock FileMaker Database using SQLite
+  mock_database:
+    image: python:3.11-alpine
+    container_name: crown_mock_database
+    working_dir: /app
+    command: python mock_database_server.py
+    volumes:
+      - ./dev/mock_database.py:/app/mock_database_server.py
+      - mock_db_data:/app/data
+    ports:
+      - "5432:5432"
+    environment:
+      - DB_PATH=/app/data/mock_crown.db
+      - PYTHONPATH=/app
+    networks:
+      - crown_dev_network
+
+  # Web Server (development mode)
+  web_server:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.web
+    container_name: crown_web_server_dev
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    environment:
+      - ENVIRONMENT=development
+      - WEB_HOST=0.0.0.0
+      - WEB_PORT=8080
+      - WEB_DEBUG=true
+      - WEB_SECRET_KEY=dev-secret-key
+      - FILEMAKER_SERVER=mock_database
+      - FILEMAKER_PORT=5432
+      - FILEMAKER_DATABASE=mock_crown
+      - FILEMAKER_USERNAME=dev_user
+      - FILEMAKER_PASSWORD=dev_password
+      - PROCESSING_INPUT_DIR=/data/input
+      - PROCESSING_PROCESSING_DIR=/data/processing
+      - PROCESSING_PRODUCTION_DIR=/data/production
+      - PROCESSING_REJECTED_DIR=/data/rejected
+      - PROCESSING_METADATA_DIR=/data/metadata
+      - PROCESSING_LOGS_DIR=/data/logs
+      - LOG_LEVEL=DEBUG
+      - PYTHONPATH=/app
+    volumes:
+      - ./src:/app/src
+      - ./templates:/app/templates
+      - ./config:/app/config
+      - ./dev/test_data:/data
+      - ./dev/sample_images:/data/sample_input
+    networks:
+      - crown_dev_network
+    depends_on:
+      - mock_database
+
+  # ML Processor (CPU-only for development)
+  ml_processor:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.ml
+    container_name: crown_ml_processor_dev
+    restart: unless-stopped
+    ports:
+      - "8001:8001"
+    environment:
+      - ENVIRONMENT=development
+      - CUDA_VISIBLE_DEVICES=""
+      - OMP_NUM_THREADS=2
+      - MKL_NUM_THREADS=2
+      - LOG_LEVEL=DEBUG
+      - PYTHONPATH=/app
+    volumes:
+      - ./src:/app/src
+      - ./config:/app/config
+      - ./dev/test_data:/data
+      - ./assets:/app/assets
+      - ml_models_dev:/root/.cache
+    networks:
+      - crown_dev_network
+
+  # File Monitor
+  file_monitor:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.monitor
+    container_name: crown_file_monitor_dev
+    restart: unless-stopped
+    ports:
+      - "8002:8002"
+    environment:
+      - ENVIRONMENT=development
+      - PROCESSING_INPUT_DIR=/data/input
+      - PROCESSING_METADATA_DIR=/data/metadata
+      - PROCESSING_SCAN_INTERVAL_SECONDS=10
+      - LOG_LEVEL=DEBUG
+      - PYTHONPATH=/app
+    volumes:
+      - ./src:/app/src
+      - ./config:/app/config
+      - ./dev/test_data:/data
+      - ./dev/sample_images:/data/sample_input
+    networks:
+      - crown_dev_network
+
+  # Image Processor
+  image_processor:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.processor
+    container_name: crown_image_processor_dev
+    restart: unless-stopped
+    ports:
+      - "8003:8003"
+    environment:
+      - ENVIRONMENT=development
+      - JAVA_HOME=/usr/lib/jvm/java-17-openjdk-amd64
+      - JVM_OPTS=-Xmx512m -Xms128m
+      - FILEMAKER_SERVER=mock_database
+      - FILEMAKER_PORT=5432
+      - FILEMAKER_DATABASE=mock_crown
+      - FILEMAKER_USERNAME=dev_user
+      - FILEMAKER_PASSWORD=dev_password
+      - LOG_LEVEL=DEBUG
+      - PYTHONPATH=/app
+    volumes:
+      - ./src:/app/src
+      - ./config:/app/config
+      - ./assets:/app/assets
+      - ./dev/test_data:/data
+    networks:
+      - crown_dev_network
+    depends_on:
+      - mock_database
+
+  # Teams Notifier (development mode)
+  teams_notifier:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.notifier
+    container_name: crown_teams_notifier_dev
+    restart: unless-stopped
+    ports:
+      - "8004:8004"
+    environment:
+      - ENVIRONMENT=development
+      - TEAMS_WEBHOOK_URL=http://mock_teams:3000/webhook
+      - WEB_SERVER_URL=http://web_server:8080
+      - LOG_LEVEL=DEBUG
+      - PYTHONPATH=/app
+    volumes:
+      - ./src:/app/src
+      - ./config:/app/config
+      - ./templates:/app/templates
+    networks:
+      - crown_dev_network
+
+  # Mock Teams webhook receiver
+  mock_teams:
+    image: httpd:alpine
+    container_name: crown_mock_teams
+    ports:
+      - "3000:80"
+    volumes:
+      - ./dev/mock_teams.html:/usr/local/apache2/htdocs/index.html
+    networks:
+      - crown_dev_network
+
+  # n8n for local workflow testing
+  n8n_dev:
+    image: n8nio/n8n:latest
+    container_name: crown_n8n_dev
+    restart: unless-stopped
+    ports:
+      - "5678:5678"
+    environment:
+      - N8N_BASIC_AUTH_ACTIVE=true
+      - N8N_BASIC_AUTH_USER=admin
+      - N8N_BASIC_AUTH_PASSWORD=admin
+      - N8N_HOST=0.0.0.0
+      - N8N_PORT=5678
+      - N8N_PROTOCOL=http
+      - WEBHOOK_URL=http://localhost:5678
+      - NODE_ENV=development
+      # Service URLs for development
+      - ML_PROCESSOR_URL=http://ml_processor:8001
+      - WEB_SERVER_URL=http://web_server:8080
+      - FILE_MONITOR_URL=http://file_monitor:8002
+      - IMAGE_PROCESSOR_URL=http://image_processor:8003
+      - TEAMS_NOTIFIER_URL=http://teams_notifier:8004
+    volumes:
+      - n8n_dev_data:/home/node/.n8n
+      - ./src:/scripts
+      - ./dev/n8n_workflows:/home/node/.n8n/workflows
+    networks:
+      - crown_dev_network
+    depends_on:
+      - web_server
+      - ml_processor
+      - file_monitor
+      - image_processor
+      - teams_notifier
+
+networks:
+  crown_dev_network:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.21.0.0/16
+
+volumes:
+  n8n_dev_data:
+    driver: local
+  ml_models_dev:
+    driver: local
+  mock_db_data:
     driver: local

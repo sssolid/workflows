@@ -1,13 +1,15 @@
 # ===== tests/unit/test_background_removal_service.py =====
+from datetime import datetime
+
 import pytest
 from unittest.mock import Mock, patch, MagicMock
 from pathlib import Path
 from PIL import Image
 import io
 
-from src.services.background_removal_service import BackgroundRemovalService
-from src.models.file_models import ProcessedFile, FileMetadata, FileType
-from src.models.processing_models import BackgroundRemovalRequest, ProcessingModel
+from ...src.services.background_removal_service import BackgroundRemovalService
+from ...src.models.file_models import ProcessedFile, FileMetadata, FileType
+from ...src.models.processing_models import BackgroundRemovalRequest, ProcessingModel
 
 
 class TestBackgroundRemovalService:
