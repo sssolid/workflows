@@ -13,15 +13,15 @@ __author__ = "Crown Automotive Sales Co., Inc."
 # ===== src/models/__init__.py =====
 """Data models for the Crown Automotive Image Processing System."""
 
-from .file_models import (
+from .models.file_models import (
     FileMetadata, FileStatus, FileType, ImageDimensions, ProcessedFile
 )
-from .processing_models import (
+from .models.processing_models import (
     ProcessingRequest, ProcessingResult, BackgroundRemovalRequest,
     FormatGenerationRequest, ProcessingModel
 )
-from .metadata_models import PartMetadata, ExifMetadata
-from .workflow_models import WorkflowStep, WorkflowInstance
+from .models.metadata_models import PartMetadata, ExifMetadata
+from .models.workflow_models import WorkflowStep, WorkflowInstance
 
 __all__ = [
     # File models

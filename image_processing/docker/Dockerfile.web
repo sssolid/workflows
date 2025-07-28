@@ -32,7 +32,8 @@ RUN mkdir -p /app/src /config /templates /assets /data && \
 
 # Copy clean architecture source
 COPY --chown=appuser:appgroup src/ /app/src/
-COPY --chown=appuser:appgroup templates/ /templates/
+COPY --chown=appuser:appgroup templates/ /app/templates/
+COPY --chown=appuser:appgroup config/ /app/config/
 
 # Set Python path
 ENV PYTHONPATH=/app

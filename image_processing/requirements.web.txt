@@ -12,8 +12,12 @@ Pillow>=10.0.0
 # Utilities
 structlog>=23.1.0
 pydantic>=2.4.0
+pydantic-settings>=2.0.0
 python-dateutil>=2.8.0
 
 # HTTP requests
 httpx>=0.24.0
 requests>=2.31.0
+
+numpy>=1.24.0
+PyYAML>=6.0

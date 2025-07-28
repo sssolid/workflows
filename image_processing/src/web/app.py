@@ -30,20 +30,57 @@ logger = logging.getLogger(__name__)
 
 def create_app() -> Flask:
     """Create and configure Flask application."""
-    app = Flask(__name__)
+    app = Flask(__name__, template_folder='/app/templates')
     app.config['SECRET_KEY'] = settings.web.secret_key
     app.config['MAX_CONTENT_LENGTH'] = settings.processing.max_file_size_bytes
 
-    # Initialize services
-    file_monitor = FileMonitorService()
-    part_mapper = PartMappingService()
-    filemaker = FileMakerService()
-    notifier = NotificationService()
+    # Initialize services (gracefully handle failures)
+    file_monitor = None
+    part_mapper = None
+    filemaker = None
+    notifier = None
+
+    try:
+        file_monitor = FileMonitorService()
+        logger.info("File monitor service initialized")
+    except Exception as e:
+        logger.warning(f"File monitor service failed to initialize: {e}")
+
+    try:
+        part_mapper = PartMappingService()
+        logger.info("Part mapping service initialized")
+    except Exception as e:
+        logger.warning(f"Part mapping service failed to initialize: {e}")
+
+    try:
+        filemaker = FileMakerService()
+        logger.info("FileMaker service initialized")
+    except Exception as e:
+        logger.warning(f"FileMaker service failed to initialize: {e}")
+
+    try:
+        notifier = NotificationService()
+        logger.info("Notification service initialized")
+    except Exception as e:
+        logger.warning(f"Notification service failed to initialize: {e}")
 
     @app.route('/')
     def dashboard():
         """Main dashboard."""
         try:
+            # Try to get current status, but handle if services aren't ready yet
+            try:
+                pending_files = file_monitor.get_files_by_status(FileStatus.AWAITING_REVIEW)
+                completed_files = file_monitor.get_files_by_status(FileStatus.APPROVED)
+            except Exception as e:
+                logger.warning(f"File monitor not ready: {e}")
+                # Return minimal dashboard if services aren't ready
+                return render_template('dashboard.html',
+                                       pending_files=[],
+                                       completed_files=[],
+                                       stats={'pending': 0, 'completed': 0, 'processing': 0, 'failed': 0},
+                                       server_url=f"http://{settings.web.host}:{settings.web.port}"
+                                       )
             # Get current status
             pending_files = file_monitor.get_files_by_status(FileStatus.AWAITING_REVIEW)
             completed_files = file_monitor.get_files_by_status(FileStatus.APPROVED)
@@ -72,9 +109,17 @@ def create_app() -> Flask:
 
                 pending_data.append(file_data)
 
-            return render_template('dashboard.html', {
-                'pending_files': pending_data,
-                'completed_files': [
+            # Simplified stats for initial testing
+            stats = {
+                'pending': len(pending_files) if pending_files else 0,
+                'completed': len(completed_files) if completed_files else 0,
+                'processing': 0,
+                'failed': 0
+            }
+
+            completed_data = []
+            if completed_files:
+                completed_data = [
                     {
                         'file_id': f.metadata.file_id,
                         'filename': f.metadata.filename,
@@ -82,15 +127,14 @@ def create_app() -> Flask:
                         'completed_at': f.metadata.created_at.isoformat()
                     }
                     for f in completed_files[:10]
-                ],
-                'stats': {
-                    'pending': len(pending_files),
-                    'completed': len(completed_files),
-                    'processing': len(file_monitor.get_files_by_status(FileStatus.PROCESSING)),
-                    'failed': len(file_monitor.get_files_by_status(FileStatus.FAILED))
-                },
-                'server_url': f"http://{settings.web.host}:{settings.web.port}"
-            })
+                ]
+
+            return render_template('dashboard.html',
+                                   pending_files=pending_data,
+                                   completed_files=completed_data,
+                                   stats=stats,
+                                   server_url=f"http://{settings.web.host}:{settings.web.port}"
+                                   )
         except Exception as e:
             logger.error(f"Dashboard error: {e}")
             return render_template('error.html', error=str(e)), 500
@@ -142,20 +186,20 @@ def create_app() -> Flask:
         if part_number:
             part_metadata = filemaker.get_part_metadata(part_number)
 
-        return render_template('review.html', {
-            'file': {
-                'file_id': file_obj.metadata.file_id,
-                'filename': file_obj.metadata.filename,
-                'status': file_obj.metadata.status,
-                'size_mb': file_obj.metadata.size_mb,
-                'dimensions': file_obj.dimensions.dict() if file_obj.dimensions else None,
-                'part_number': part_number,
-                'part_mapping': part_mapping.dict() if part_mapping else None,
-                'part_metadata': part_metadata.dict() if part_metadata else None,
-                'processing_history': file_obj.processing_history
-            },
-            'server_url': f"http://{settings.web.host}:{settings.web.port}"
-        })
+        return render_template('review.html',
+                               file={
+                                   'file_id': file_obj.metadata.file_id,
+                                   'filename': file_obj.metadata.filename,
+                                   'status': file_obj.metadata.status,
+                                   'size_mb': file_obj.metadata.size_mb,
+                                   'dimensions': file_obj.dimensions.dict() if file_obj.dimensions else None,
+                                   'part_number': part_number,
+                                   'part_mapping': part_mapping.dict() if part_mapping else None,
+                                   'part_metadata': part_metadata.dict() if part_metadata else None,
+                                   'processing_history': file_obj.processing_history
+                               },
+                               server_url=f"http://{settings.web.host}:{settings.web.port}"
+                               )
 
     @app.route('/edit/<file_id>')
     def edit_metadata(file_id: str):
@@ -175,18 +219,27 @@ def create_app() -> Flask:
         if part_number:
             part_metadata = filemaker.get_part_metadata(part_number)
 
-        return render_template('edit_metadata.html', {
-            'file': {
-                'file_id': file_obj.metadata.file_id,
-                'filename': file_obj.metadata.filename,
-                'status': file_obj.metadata.status,
-                'size_mb': file_obj.metadata.size_mb,
-                'part_number': part_number,
-                'part_mapping': part_mapping.dict() if part_mapping else None,
-                'metadata_info': part_metadata.dict() if part_metadata else None,
-                'processing_history': file_obj.processing_history
-            },
-            'server_url': f"http://{settings.web.host}:{settings.web.port}"
+        return render_template('edit_metadata.html',
+                               file={
+                                   'file_id': file_obj.metadata.file_id,
+                                   'filename': file_obj.metadata.filename,
+                                   'status': file_obj.metadata.status,
+                                   'size_mb': file_obj.metadata.size_mb,
+                                   'part_number': part_number,
+                                   'part_mapping': part_mapping.dict() if part_mapping else None,
+                                   'metadata_info': part_metadata.dict() if part_metadata else None,
+                                   'processing_history': file_obj.processing_history
+                               },
+                               server_url=f"http://{settings.web.host}:{settings.web.port}"
+                               )
+
+    @app.route('/test')
+    def test_route():
+        """Simple test route to verify Flask is working."""
+        return jsonify({
+            'status': 'ok',
+            'message': 'Flask app is running',
+            'timestamp': datetime.now().isoformat()
         })
 
     @app.route('/api/status')
@@ -406,6 +459,11 @@ def create_app() -> Flask:
     @app.errorhandler(500)
     def internal_error(error):
         return render_template('error.html', error='Internal server error'), 500
+
+    @app.errorhandler(Exception)
+    def handle_exception(e):
+        logger.error(f"Unhandled exception: {e}")
+        return render_template('error.html', error=f'Application error: {str(e)}'), 500
 
     return app
 

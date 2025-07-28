@@ -49,8 +49,8 @@ services:
       - LOG_LEVEL=DEBUG
     volumes:
       - ./src:/app/src
-      - ./templates:/templates
-      - ./config:/config
+      - ./templates:/app/templates
+      - ./config:/app/config
       - ./dev/test_data:/data
       - ./dev/sample_images:/data/input
     networks:
@@ -75,9 +75,9 @@ services:
       - LOG_LEVEL=DEBUG
     volumes:
       - ./src:/app/src
-      - ./config:/config
+      - ./config:/app/config
       - ./dev/test_data:/data
-      - ./assets:/assets
+      - ./assets:/app/assets
       - ml_models_dev:/root/.cache
     networks:
       - crown_dev_network
@@ -99,7 +99,7 @@ services:
       - LOG_LEVEL=DEBUG
     volumes:
       - ./src:/app/src
-      - ./config:/config
+      - ./config:/app/config
       - ./dev/test_data:/data
       - ./dev/sample_images:/data/input
     networks:
@@ -126,8 +126,8 @@ services:
       - LOG_LEVEL=DEBUG
     volumes:
       - ./src:/app/src
-      - ./config:/config
-      - ./assets:/assets
+      - ./config:/app/config
+      - ./assets:/app/assets
       - ./dev/test_data:/data
     networks:
       - crown_dev_network
@@ -150,8 +150,8 @@ services:
       - LOG_LEVEL=DEBUG
     volumes:
       - ./src:/app/src
-      - ./config:/config
-      - ./templates:/templates
+      - ./config:/app/config
+      - ./templates:/app/templates
     networks:
       - crown_dev_network
 

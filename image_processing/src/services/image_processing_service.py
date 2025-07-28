@@ -1,4 +1,5 @@
 # ===== src/services/image_processing_service.py =====
+import logging
 import time
 import yaml
 from pathlib import Path

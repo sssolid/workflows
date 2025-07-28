@@ -1,6 +1,6 @@
 # ===== src/models/processing_models.py =====
 from datetime import datetime
-from typing import Dict, List, Optional, Any
+from typing import Dict, List, Optional, Any, Literal
 from pathlib import Path
 from pydantic import BaseModel, Field
 from enum import Enum
@@ -45,7 +45,7 @@ class ProcessingResult(BaseModel):
 
 class BackgroundRemovalRequest(ProcessingRequest):
     """Specific request for background removal."""
-    processing_type: str = Field(default="background_removal", const=True)
+    processing_type: Literal["background_removal"] = "background_removal"
     model: ProcessingModel = Field(default=ProcessingModel.ISNET_GENERAL)
     enhance_input: bool = Field(default=True)
     post_process: bool = Field(default=True)
@@ -54,7 +54,7 @@ class BackgroundRemovalRequest(ProcessingRequest):
 
 class FormatGenerationRequest(ProcessingRequest):
     """Request for generating multiple output formats."""
-    processing_type: str = Field(default="format_generation", const=True)
+    processing_type: Literal["format_generation"] = "format_generation"
     output_formats: List[str] = Field(..., min_items=1)
     include_watermark: bool = Field(default=False)
     include_brand_icon: bool = Field(default=False)

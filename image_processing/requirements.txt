@@ -1,32 +1,20 @@
 # ===== requirements.txt =====
-# Crown Automotive Image Processing System - Main Requirements
-# Core dependencies for the complete system
+# Crown Automotive Image Processing System - Complete Working Requirements
 
 # Web Framework
 flask>=2.3.0
 fastapi>=0.104.0
 uvicorn>=0.24.0
 jinja2>=3.1.0
+werkzeug>=2.3.0
 
 # Data Models and Validation
 pydantic>=2.4.0
 pydantic-settings>=2.0.0
 
-# Image Processing
+# Image Processing (basic)
 Pillow>=10.0.0
-opencv-python-headless>=4.8.0
 numpy>=1.24.0
-
-# Machine Learning (Background Removal)
-torch>=2.0.0
-torchvision>=0.15.0
-rembg>=2.0.50
-onnxruntime
-
-# Database Connectivity
-pyodbc>=4.0.39
-jpype1>=1.4.0
-jaydebeapi>=1.2.3
 
 # HTTP and API
 httpx>=0.24.0
@@ -41,27 +29,21 @@ PyYAML>=6.0
 structlog>=23.1.0
 python-dateutil>=2.8.0
 
-# File Processing
-exifread>=3.0.0
-piexif>=1.1.3
-aiofiles>=23.1.0
+# File Processing and Utilities
+pathlib2>=2.3.7
+click>=8.1.0
 
-# Utilities
-tqdm>=4.65.0
-pathlib-mate>=1.0.0
-
-# Testing (optional, for development)
+# Development and Testing
 pytest>=7.4.0
 pytest-cov>=4.1.0
-pytest-mock>=3.11.0
-pytest-asyncio>=0.21.0
 
-# Code Quality (optional, for development)
-black>=23.0.0
-isort>=5.12.0
-flake8>=6.0.0
-mypy>=1.5.0
+# ML Processing (for when ML container is added)
+# torch>=2.0.0
+# torchvision>=0.15.0
+# rembg>=2.0.50
+# opencv-python-headless>=4.8.0
 
-# Documentation (optional)
-sphinx>=7.0.0
-sphinx-rtd-theme>=1.3.0
+# Database (commented out for dev)
+# pyodbc>=4.0.39
+# jpype1>=1.4.0
+# jaydebeapi>=1.2.3
